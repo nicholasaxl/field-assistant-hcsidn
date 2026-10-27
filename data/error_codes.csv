@@ -1,0 +1,49 @@
+device_model,code,meaning,fix,severity
+HX-POS-200,P-1001,"Receipt printer out of paper","Open the printer cover, load a new 80mm thermal roll with paper feeding from the bottom, close the cover until it clicks.",Low
+HX-POS-200,P-1002,"Receipt printer paper jam","Open the cover, remove the jammed paper, wipe the platen roller, reload the paper and run a test print from the service menu.",Medium
+HX-POS-200,P-1003,"Printer head overheated","Power off the printer for 10 minutes, check that the vents are not blocked, and replace the print head if the error repeats.",Medium
+HX-POS-200,P-1010,"EMV card reader not detected","Reseat the reader cable, restart the POS application, and replace the reader if it is still not detected.",High
+HX-POS-200,P-1011,"Chip card read failure","Clean the chip contacts with a lint-free swab and retry. Use the contactless fallback if allowed by policy.",Medium
+HX-POS-200,P-1012,"Contactless reader timeout","Check the antenna cable, reboot the terminal and update the reader firmware.",Medium
+HX-POS-200,P-2001,"Network connection lost","Check the cable and the switch port link light, ping the gateway, then restart the network service. See the network connectivity runbook.",High
+HX-POS-200,P-2002,"Payment host timeout","Verify the payment gateway is reachable, check the firewall rule for the payment port and retry. Escalate if the host status page shows an outage.",High
+HX-POS-200,P-2010,"TLS certificate expired","Renew the terminal certificate from the key management console and restart the payment service.",High
+HX-POS-200,P-3001,"Cash drawer failed to open","Check the RJ12 drawer cable at the printer, verify the drawer-kick setting, and use the manual key release for the customer meanwhile.",Medium
+HX-POS-200,P-3002,"Barcode scanner not responding","Reconnect the USB cable, scan the factory reset barcode from the scanner guide, and replace the scanner if unresponsive.",Low
+HX-POS-200,P-4001,"Touchscreen calibration error","Open the service menu and run the touchscreen calibration utility.",Low
+HX-POS-200,P-4002,"Customer display not detected","Check the display cable and the resolution setting, then restart the application.",Low
+HX-POS-200,P-5001,"Disk space low","Clear logs and temporary files from the maintenance menu. Escalate if free space stays below 5 percent.",Medium
+HX-POS-200,P-5002,"Application crash on startup","Collect the logs, restart the device, and reinstall the application package if the crash repeats.",High
+HX-POS-200,P-9000,"Unknown fatal error","Collect the diagnostics bundle and escalate to level 2 support.",Critical
+HX-ATM-500,A-1001,"Cash dispenser jam","Follow the cash dispenser jam runbook: take the ATM out of service, open the safe with two-person control, clear the note path and run a dispense test.",High
+HX-ATM-500,A-1002,"Cassette not detected","Reseat the cassette until it clicks, check the cassette ID switch and clean the cassette connector.",High
+HX-ATM-500,A-1003,"Low cash in cassette","Schedule a replenishment visit. Refill is done with two-person control and the counters must be reset.",Medium
+HX-ATM-500,A-1004,"Reject bin full","Empty the reject bin, log the rejected notes and reset the reject counter.",Medium
+HX-ATM-500,A-2001,"Card reader jam","Remove the card with the retrieval tool, inspect the shutter for debris and run the card reader test.",High
+HX-ATM-500,A-2002,"Card reader skimmer suspected","Take the ATM out of service immediately, photograph the fascia and escalate to the security team. Do not touch anything else.",Critical
+HX-ATM-500,A-3001,"Receipt printer out of paper","Replace the paper roll in the receipt module and run a test print.",Low
+HX-ATM-500,A-3002,"Journal printer fault","Check the journal paper and ribbon, then restart the journal module from the service menu.",Medium
+HX-ATM-500,A-4001,"PIN pad encryption key error","Do not reboot repeatedly. Reload the keys using the secure key loading procedure and escalate to the key custodian.",Critical
+HX-ATM-500,A-4002,"PIN pad keys not responding","Check the PIN pad cable and run the keypad self test. Replace the PIN pad if the test fails.",High
+HX-ATM-500,A-5001,"Host communication lost","Check the network link and router, ping the host, and restart the communication service. See the network connectivity runbook.",High
+HX-ATM-500,A-5002,"Host declined all transactions","Check the host status and the terminal ID configuration. Escalate to the processing team if the host is healthy.",High
+HX-ATM-500,A-6001,"Door open alarm","Verify the front door and safe door are closed and the door sensors are clean. Reset the alarm from the supervisor menu.",Medium
+HX-ATM-500,A-6002,"Vibration sensor alarm","Check for movement or tampering on site, then reset the sensor from the supervisor menu.",High
+HX-ATM-500,A-7001,"Operating system update pending","Schedule a maintenance window and apply the update with the standard patch procedure.",Low
+HX-ATM-500,A-9000,"Unknown fatal error","Capture the diagnostics logs and escalate to level 2 support.",Critical
+HX-KIOSK-300,K-1001,"Card reader not detected","Reseat the USB cable at the reader and restart the kiosk application. See the kiosk card reader runbook.",High
+HX-KIOSK-300,K-1002,"Card reader read errors","Clean the reader slot with a cleaning card, then run the reader self test.",Medium
+HX-KIOSK-300,K-1003,"Card capture bin full","Empty the card capture bin and reset the counter from the service menu.",Medium
+HX-KIOSK-300,K-2001,"Ticket printer out of paper","Load a new paper roll, making sure the paper is fed through the guide, and run a test print.",Low
+HX-KIOSK-300,K-2002,"Ticket printer cutter jam","Power off, remove the jammed paper, check the cutter blade for debris and test the cutter.",Medium
+HX-KIOSK-300,K-3001,"Touchscreen unresponsive","Clean the screen, restart the display service and recalibrate the touch panel from the service menu.",Medium
+HX-KIOSK-300,K-3002,"Display shows black screen","Check the display power and video cable, then reseat the cable and reboot the kiosk.",High
+HX-KIOSK-300,K-4001,"Network connection lost","Check the cable and the Wi-Fi or LAN link, then restart the network service. See the network connectivity runbook.",High
+HX-KIOSK-300,K-4002,"Back-end service unreachable","Ping the back-end service address, check the firewall and DNS, and escalate if the service is down.",High
+HX-KIOSK-300,K-5001,"Cabinet door open","Close the cabinet door and check the door sensor. Reset the alarm from the service menu.",Medium
+HX-KIOSK-300,K-5002,"Cabinet temperature high","Check the cabinet fan and vents, clean the dust filter and make sure the kiosk is not in direct sunlight.",Medium
+HX-KIOSK-300,K-6001,"Cash acceptor jam","Open the acceptor, clear the note path, clean the sensors and run the acceptor test.",High
+HX-KIOSK-300,K-6002,"Cash acceptor stacker full","Empty the stacker with two-person control and reset the counters.",Medium
+HX-KIOSK-300,K-7001,"Application stuck in attract mode","Restart the kiosk application from the service menu and check the session timeout setting.",Low
+HX-KIOSK-300,K-7002,"Kiosk software update failed","Retry the update, verify disk space, and roll back to the previous package if it fails again.",Medium
+HX-KIOSK-300,K-9000,"Unknown fatal error","Collect diagnostics and escalate to level 2 support.",Critical

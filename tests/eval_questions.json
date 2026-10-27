@@ -1,0 +1,14 @@
+[
+  {"question": "The receipt printer on the POS has a paper jam, what should I do?", "device_model": "HX-POS-200", "expected_source": "pos_receipt_printer_runbook.md"},
+  {"question": "Receipts are printing blank", "device_model": "HX-POS-200", "expected_source": "pos_receipt_printer_runbook.md"},
+  {"question": "Cash drawer will not open after a sale", "device_model": "HX-POS-200", "expected_source": "pos_receipt_printer_runbook.md"},
+  {"question": "How do I clear a note jam in the ATM dispenser?", "device_model": "HX-ATM-500", "expected_source": "atm_cash_dispenser_jam_runbook.md"},
+  {"question": "ATM cash cassette is not detected", "device_model": "HX-ATM-500", "expected_source": "atm_cash_dispenser_jam_runbook.md"},
+  {"question": "Who needs to be present when opening the ATM safe?", "device_model": "HX-ATM-500", "expected_source": "atm_cash_dispenser_jam_runbook.md"},
+  {"question": "Kiosk card reader is not being detected", "device_model": "HX-KIOSK-300", "expected_source": "kiosk_card_reader_runbook.md"},
+  {"question": "Kiosk card reader gives repeated read errors", "device_model": "HX-KIOSK-300", "expected_source": "kiosk_card_reader_runbook.md"},
+  {"question": "Kiosk touchscreen touches are offset", "device_model": "HX-KIOSK-300", "expected_source": "kiosk_card_reader_runbook.md"},
+  {"question": "Device has IP address 169.254.x.x and cannot reach the host", "device_model": "all", "expected_source": "network_connectivity_runbook.md"},
+  {"question": "Payment host timeouts but ping works", "device_model": "all", "expected_source": "network_connectivity_runbook.md"},
+  {"question": "Several devices at one site lost connectivity at once", "device_model": "all", "expected_source": "network_connectivity_runbook.md"}
+]
