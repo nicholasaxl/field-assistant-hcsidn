@@ -5,6 +5,9 @@ langchain-ollama
 langchain-chroma
 langchain-text-splitters
 chromadb
+anthropic
+openai
+keyring
 pypdf
 python-docx
 fastapi

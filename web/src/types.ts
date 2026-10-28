@@ -27,7 +27,45 @@ export type Outcome = "fixed" | "not_fixed" | "escalated";
 export type Clarify = { kind: "device" | "detail"; prompt: string; options: string[] };
 export type HistoryItem = { question: string; device: string; sources: string[] };
 
+export type AnswerModel = { provider: string; model: string; label: string; local: boolean };
+
+export type ActiveModel = AnswerModel & { where: string; note: string | null };
+
+export type KeyStatus = {
+  saved: boolean;
+  source: "env" | "store" | null;
+  hint: string | null; // only the last four characters, never the key
+  can_store: boolean;
+  env_var: string | null;
+};
+
+export type OnlineProviderId = "anthropic" | "openai" | "gemini" | "custom";
+export type ProviderId = "ollama" | OnlineProviderId;
+
+export type ModelProvider = {
+  id: ProviderId;
+  label: string;
+  local: boolean;
+  enabled: boolean;
+  note: string;
+  key?: KeyStatus & { placeholder: string };
+  models: { id: string; label: string; price: string }[]; // empty for providers that list their own models
+  sends_to?: string | null;
+  needs_base_url?: boolean;
+  base_url?: string | null;
+};
+
+export type ModelsInfo = {
+  active: ActiveModel;
+  search: { model: string; where: string; local: boolean };
+  policy: { allow_online: boolean };
+  providers: ModelProvider[];
+};
+
+export type ModelTest = { ok: true; ms: number; reply: string } | { ok: false; message: string };
+
 export type AnswerData = {
+  model: AnswerModel | null;
   exhausted: boolean;
   asked: string;
   fast: boolean;

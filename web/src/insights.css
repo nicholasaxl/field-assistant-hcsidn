@@ -276,7 +276,7 @@
 }
 .outcome[data-outcome="escalated"] {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .score {

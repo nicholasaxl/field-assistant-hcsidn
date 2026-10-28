@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { askStream, getDevices, getDocuments, getHealth } from "./api";
+import { askStream, getDevices, getDocuments, getHealth, getModels } from "./api";
 import { Composer } from "./Composer";
 import { EvidenceDock } from "./Evidence";
 import { Header } from "./Header";
 import { Hero } from "./Hero";
 import { Insights } from "./Insights";
 import { Library } from "./Library";
+import { ModelSettings } from "./ModelSettings";
 import { TurnView } from "./TurnView";
-import type { DocInfo, Health, StreamEvent, Turn } from "./types";
+import type { DocInfo, Health, ModelsInfo, StreamEvent, Turn } from "./types";
 import { newId, useMedia, useTheme } from "./utils";
 
 function applyEvent(turn: Turn, event: StreamEvent): Turn {
@@ -43,6 +44,8 @@ export default function App() {
   const [health, setHealth] = useState<Health | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
+  const [modelOpen, setModelOpen] = useState(false);
+  const [models, setModels] = useState<ModelsInfo | null>(null);
   const [evidence, setEvidence] = useState<{ turnId: string; n: number | null; open: boolean } | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
@@ -70,13 +73,27 @@ export default function App() {
     /* still failing: the header health pill already tells the user the server is unreachable */
   }, []);
 
+  const refreshModels = useCallback(async () => {
+    try {
+      setModels(await getModels());
+      setHealth(await getHealth());
+    } catch {
+      /* the model pill falls back to the health state */
+    }
+  }, []);
+
   useEffect(() => {
     void refreshLibrary();
-    const poll = () => getHealth().then(setHealth).catch(() => setHealth({ ollama: false, ready: false, chat_model: "", embed_model: "" }));
+    void refreshModels();
+    const poll = () => {
+      // The label for the model in use is refreshed too, so it can't go stale if it changes elsewhere.
+      getModels().then(setModels).catch(() => undefined);
+      return getHealth().then(setHealth).catch(() => setHealth({ ollama: false, ready: false, chat_model: "", embed_model: "" }));
+    };
     void poll();
     const timer = setInterval(poll, 15000);
     return () => clearInterval(timer);
-  }, [refreshLibrary]);
+  }, [refreshLibrary, refreshModels]);
 
   const ask = useCallback(
     async (question: string, options?: { device?: string; infer?: boolean }) => {
@@ -155,6 +172,9 @@ export default function App() {
         theme={theme}
         onTheme={toggleTheme}
         health={health}
+        models={models}
+        modelOpen={modelOpen}
+        onModel={() => setModelOpen((o) => !o)}
         docCount={libraryReady ? docs.length : null}
         libraryOpen={libraryOpen}
         onLibrary={() => setLibraryOpen((o) => !o)}
@@ -216,6 +236,8 @@ export default function App() {
           onClose={() => setEvidence((e) => (e ? { ...e, open: false } : e))}
         />
       </main>
+
+      <ModelSettings open={modelOpen} onClose={() => setModelOpen(false)} models={models} onChanged={refreshModels} />
 
       <Insights
         open={insightsOpen}

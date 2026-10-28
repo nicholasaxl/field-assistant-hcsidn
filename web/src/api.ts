@@ -1,9 +1,15 @@
 import type {
+  ActiveModel,
   DocInfo,
   Health,
   HistoryItem,
   InsightsData,
+  KeyStatus,
+  ModelsInfo,
+  ModelTest,
+  OnlineProviderId,
   Outcome,
+  ProviderId,
   Reason,
   Scorecard,
   StreamEvent,
@@ -91,7 +97,36 @@ export const removeSampleData = () =>
   fetch("/api/insights/sample", { method: "DELETE" }).then((r) => json<{ removed: number }>(r));
 export const clearAllData = () =>
   fetch("/api/insights/data", { method: "DELETE" }).then((r) => json<{ removed: number }>(r));
-export const getScorecard = () => fetch("/api/scorecard").then((r) => json<Scorecard>(r));
+export const getModels = () => fetch("/api/models").then((r) => json<ModelsInfo>(r));
+
+export const selectModel = (provider: ProviderId, model: string, consent = false, baseUrl?: string) =>
+  post("/api/models/select", { provider, model, consent, base_url: baseUrl || null }).then((r) =>
+    json<{ active: ActiveModel }>(r),
+  );
+
+// The key is sent once and never comes back: the server replies with the last four characters only.
+export const saveApiKey = (provider: OnlineProviderId, key: string) =>
+  fetch("/api/models/key", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ provider, key }),
+  }).then((r) => json<{ ok: boolean; key: KeyStatus }>(r));
+
+export const removeApiKey = (provider: OnlineProviderId) =>
+  fetch(`/api/models/key/${provider}`, { method: "DELETE" }).then((r) =>
+    json<{ ok: boolean; key: KeyStatus; active: ActiveModel }>(r),
+  );
+
+export const testModel = (provider: ProviderId, model: string, baseUrl?: string) =>
+  post("/api/models/test", { provider, model, base_url: baseUrl || null }).then((r) => json<ModelTest>(r));
+
+// Asks the provider which models the saved key may use, so the list never goes stale.
+export const listAvailableModels = (provider: OnlineProviderId, baseUrl?: string) =>
+  post("/api/models/available", { provider, base_url: baseUrl || null }).then((r) =>
+    json<{ ok: true; models: string[] } | { ok: false; message: string }>(r),
+  );
+
+export const getScorecard =() => fetch("/api/scorecard").then((r) => json<Scorecard>(r));
 
 export const deleteDocument =(source: string) =>
   fetch(`/api/documents/${encodeURIComponent(source)}`, { method: "DELETE" }).then((r) =>

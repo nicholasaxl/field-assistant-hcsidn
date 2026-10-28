@@ -8,6 +8,7 @@ MANUALS_DIR = DATA_DIR / "manuals"
 ERROR_CODES_CSV = DATA_DIR / "error_codes.csv"
 POLICIES_JSON = DATA_DIR / "policies.json"
 GLOSSARY_JSON = DATA_DIR / "glossary.json"
+MODEL_SETTINGS_JSON = DATA_DIR / "model_settings.json"  # which model is active (never contains a key)
 FEEDBACK_DB = DATA_DIR / "feedback.db"
 DOCS_DIR = ROOT / "docs"
 # Default for the Insights time-saved estimate: engineer minutes avoided per question that was fixed

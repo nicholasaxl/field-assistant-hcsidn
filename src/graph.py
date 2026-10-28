@@ -334,11 +334,11 @@ def build_graph(
     return graph.compile()
 
 
-def make_llm():
+def make_llm(model: str | None = None):
     from langchain_ollama import ChatOllama
 
     return ChatOllama(
-        model=config.CHAT_MODEL,
+        model=model or config.CHAT_MODEL,
         base_url=config.OLLAMA_BASE_URL,
         temperature=0,
         num_ctx=config.NUM_CTX,
@@ -346,7 +346,7 @@ def make_llm():
     )
 
 
-def build_default_app(store=None, code_db: ErrorCodeDB | None = None):
+def build_default_app(store=None, code_db: ErrorCodeDB | None = None, llm=None):
     from src.ingest import get_store
     from src.retriever import retrieve
 
@@ -360,7 +360,7 @@ def build_default_app(store=None, code_db: ErrorCodeDB | None = None):
         return sorted((set(code_db.devices()) | library) - {config.ALL_DEVICES})
 
     return build_graph(
-        make_llm(),
+        llm or make_llm(),
         lambda query, device: retrieve(query, store, device),
         code_db,
         known_devices_fn=known_devices,

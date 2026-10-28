@@ -16,14 +16,21 @@
 .alert .icon {
   margin-top: 2px;
 }
+/* Critical alerts are inverted (dark on a light page, light on a dark page) so they can't be mistaken
+   for an ordinary red brand button or link. */
 .alert[data-level="critical"] {
-  background: var(--danger-soft);
-  border-color: color-mix(in srgb, var(--danger) 38%, transparent);
-  color: var(--ink);
+  border-left: 4px solid var(--accent);
+  background: var(--ink);
+  color: var(--bg);
 }
-.alert[data-level="critical"] .icon,
+.alert[data-level="critical"] .icon {
+  color: var(--accent-text);
+}
 .alert[data-level="critical"] .alert-title {
-  color: var(--danger);
+  color: var(--bg);
+}
+.alert[data-level="critical"] .alert-message {
+  color: color-mix(in srgb, var(--bg) 82%, transparent);
 }
 .alert[data-level="warning"] {
   background: var(--warn-soft);
@@ -169,7 +176,7 @@
 .reason-chip[aria-checked="true"] {
   border-color: var(--accent);
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
 }
 .feedback-note {

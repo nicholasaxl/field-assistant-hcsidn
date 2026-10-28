@@ -81,6 +81,11 @@ class FeedbackStore:
         self._db.row_factory = sqlite3.Row
         self._db.execute("PRAGMA foreign_keys = ON")
         self._db.executescript(SCHEMA)
+        # A database created before models were recorded gains the column in place; nothing is lost.
+        columns = {row["name"] for row in self._db.execute("PRAGMA table_info(interactions)")}
+        if "model" not in columns:
+            self._db.execute("ALTER TABLE interactions ADD COLUMN model TEXT")
+            self._db.commit()
 
     # ---------- writes ----------
     def log_interaction(
@@ -100,12 +105,13 @@ class FeedbackStore:
         is_sample: bool = False,
         ts: float | None = None,
         interaction_id: str | None = None,
+        model: str | None = None,
     ) -> str:
         interaction_id = interaction_id or uuid.uuid4().hex
         with self._lock, self._db:
             self._db.execute(
                 "INSERT INTO interactions (id, ts, question, device, intent, fallback, cached, elapsed,"
-                " stages, steps, sources, codes, alerts, is_sample) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                " stages, steps, sources, codes, alerts, is_sample, model) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     interaction_id,
                     ts if ts is not None else datetime.now().timestamp(),
@@ -121,6 +127,7 @@ class FeedbackStore:
                     _dump(codes),
                     _dump(alerts),
                     int(is_sample),
+                    model,
                 ),
             )
         return interaction_id
@@ -358,7 +365,7 @@ class FeedbackStore:
         out = io.StringIO()
         writer = csv.writer(out)
         writer.writerow(
-            ["time", "device", "question", "intent", "answered", "outcome", "reason", "seconds", "top_source", "sample_data"]
+            ["time", "device", "question", "intent", "answered", "outcome", "reason", "seconds", "top_source", "model", "sample_data"]
         )
         for r in self._rows(sample_mode, 0):
             writer.writerow(
@@ -372,6 +379,7 @@ class FeedbackStore:
                     r["reason"] or "",
                     r["elapsed"] if r["elapsed"] is not None else "",
                     _doc_name(r["sources"][0]) if r["sources"] else "",
+                    r["model"] or "",
                     "yes" if r["is_sample"] else "no",
                 ]
             )

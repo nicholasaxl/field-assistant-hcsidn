@@ -37,4 +37,10 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setattr(api_module, "get_feedback_store", lambda: feedback)
     test_client = TestClient(api_module.api)
     test_client.feedback = feedback
+    test_client.registry = api_module.get_registry()
     return test_client
+
+
+@pytest.fixture
+def registry(_never_touch_real_models_or_keys):
+    return _never_touch_real_models_or_keys

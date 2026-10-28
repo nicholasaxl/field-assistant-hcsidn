@@ -1,6 +1,7 @@
 {
   "escalation_contact": "Level 2 support desk (set the real number in data/policies.json)",
   "critical_severities": ["Critical"],
+  "allow_online_models": true,
   "keyword_rules": [
     {
       "id": "tampering",

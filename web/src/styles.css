@@ -3,27 +3,29 @@
   --font-ui: "Onest Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-display: "Unbounded Variable", "Onest Variable", system-ui, sans-serif;
 
-  --bg: #edf0f5;
-  --surface: rgba(255, 255, 255, 0.74);
+  /* Red and white. The red is Hitachi red (#E60012); white text on it passes contrast (4.8:1). */
+  --bg: #f7f7f8;
+  --surface: rgba(255, 255, 255, 0.82);
   --surface-solid: #ffffff;
-  --sunken: rgba(12, 18, 32, 0.045);
-  --ink: #0c1220;
-  --ink-2: #4d576b;
-  --ink-3: #6f7a8f;
-  --line: rgba(12, 18, 32, 0.1);
-  --line-strong: rgba(12, 18, 32, 0.2);
-  --accent: #2d5bff;
+  --sunken: rgba(22, 24, 29, 0.045);
+  --ink: #16181d;
+  --ink-2: #555a63;
+  --ink-3: #757a84;
+  --line: rgba(22, 24, 29, 0.1);
+  --line-strong: rgba(22, 24, 29, 0.2);
+  --accent: #e60012;
+  --accent-text: #c8000f; /* red used as text or a thin line: a touch deeper so it stays readable */
   --accent-ink: #ffffff;
-  --accent-soft: rgba(45, 91, 255, 0.1);
+  --accent-soft: rgba(230, 0, 18, 0.08);
   --ok: #0b8f63;
   --warn: #b45f04;
   --warn-soft: rgba(217, 119, 6, 0.13);
-  --danger: #c0352b;
-  --danger-soft: rgba(192, 53, 43, 0.1);
+  --danger: #b3261e;
+  --danger-soft: rgba(179, 38, 30, 0.1);
   --hi: rgba(255, 255, 255, 0.85);
-  --shadow-lg: 0 24px 56px -22px rgba(14, 24, 48, 0.32), 0 2px 6px rgba(14, 24, 48, 0.06);
-  --shadow-sm: 0 1px 2px rgba(14, 24, 48, 0.07);
-  --scrim: rgba(12, 18, 32, 0.34);
+  --shadow-lg: 0 24px 56px -22px rgba(20, 22, 28, 0.3), 0 2px 6px rgba(20, 22, 28, 0.06);
+  --shadow-sm: 0 1px 2px rgba(20, 22, 28, 0.07);
+  --scrim: rgba(22, 24, 29, 0.34);
   --ring: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
 
   --r-sm: 8px;
@@ -33,27 +35,28 @@
 }
 
 :root[data-theme="dark"] {
-  --bg: #080c15;
-  --surface: rgba(20, 27, 43, 0.72);
-  --surface-solid: #121a2b;
+  --bg: #0e0f12;
+  --surface: rgba(26, 27, 32, 0.72);
+  --surface-solid: #17181d;
   --sunken: rgba(255, 255, 255, 0.05);
-  --ink: #e9eef9;
-  --ink-2: #a0abc0;
-  --ink-3: #7a869d;
+  --ink: #f3f3f4;
+  --ink-2: #a7aab2;
+  --ink-3: #81858d;
   --line: rgba(255, 255, 255, 0.09);
   --line-strong: rgba(255, 255, 255, 0.18);
-  --accent: #7e9bff;
-  --accent-ink: #0a1020;
-  --accent-soft: rgba(126, 155, 255, 0.15);
+  --accent: #e60012;
+  --accent-text: #ff6b75; /* the brand red is too dark to read as text on a dark page */
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(255, 70, 82, 0.15);
   --ok: #3ddc9f;
   --warn: #f5a524;
   --warn-soft: rgba(245, 165, 36, 0.15);
-  --danger: #ff7a6e;
-  --danger-soft: rgba(255, 122, 110, 0.13);
+  --danger: #ff8a80;
+  --danger-soft: rgba(255, 138, 128, 0.13);
   --hi: rgba(255, 255, 255, 0.07);
   --shadow-lg: 0 28px 64px -24px rgba(0, 0, 0, 0.75), 0 2px 8px rgba(0, 0, 0, 0.4);
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --scrim: rgba(2, 4, 10, 0.62);
+  --scrim: rgba(0, 0, 0, 0.62);
 }
 
 /* ---------- Base ---------- */
@@ -80,9 +83,17 @@ body {
 }
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
   color: inherit;
+}
+/* Native controls (dropdown lists, checkboxes, scrollbars) follow the app's theme, not the system's. */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 button {
   cursor: pointer;
@@ -190,7 +201,7 @@ p {
 .pill-btn[aria-pressed="true"],
 .pill-btn[aria-expanded="true"] {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .count {
   min-width: 20px;
@@ -271,7 +282,7 @@ p {
   top: min(2vh, 16px);
   right: -150px;
   width: min(400px, 56vw);
-  color: var(--accent);
+  color: var(--accent-text);
   opacity: 0.2;
   pointer-events: none;
 }
@@ -335,7 +346,7 @@ p {
 }
 .suggestion:hover .suggestion-icon {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* ---------- Conversation ---------- */
@@ -406,7 +417,7 @@ p {
   width: 22px;
   height: 22px;
   flex: none;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .timeline-title {
   flex: 1;
@@ -565,7 +576,7 @@ p {
   border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
   border-radius: 7px;
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -636,7 +647,7 @@ p {
 }
 .notice .pill-btn {
   margin: 8px 0 0 -11px;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* ---------- Composer ---------- */
@@ -837,7 +848,7 @@ p {
   flex: none;
   border-radius: 8px;
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 12.5px;
   font-weight: 700;
 }
@@ -910,7 +921,7 @@ p {
   padding: 0;
   border: 0;
   background: none;
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 13px;
   font-weight: 500;
 }
@@ -988,7 +999,7 @@ p {
   font-size: inherit;
 }
 .dropzone-arcs {
-  color: var(--accent);
+  color: var(--accent-text);
   margin-bottom: 2px;
 }
 .field {

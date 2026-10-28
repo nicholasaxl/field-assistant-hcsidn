@@ -19,11 +19,12 @@ import httpx
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, SecretStr, field_validator
 
 import config
 from src import prompts
 from src.conversation import MAX_HISTORY
+from src.models import ModelError, ModelRegistry, SwitchableLLM
 from src.error_lookup import ErrorCodeDB
 from src.feedback import FeedbackStore
 from src.graph import build_default_app
@@ -78,7 +79,8 @@ def answer_key(question: str, device: str, infer: bool = True) -> str:
     except OSError:
         policy_stamp = 0
     normalised = " ".join(question.lower().split())
-    return f"{normalised}|{device}|{infer}|{_library_version}|{policy_stamp}|{config.CHAT_MODEL}|{config.FAST_PATH}"
+    model = get_registry().active_id()  # an answer written by one model is never served as another's
+    return f"{normalised}|{device}|{infer}|{_library_version}|{policy_stamp}|{model}|{config.FAST_PATH}"
 
 
 def warm_up_models() -> None:
@@ -89,11 +91,13 @@ def warm_up_models() -> None:
             json={"model": config.EMBED_MODEL, "input": "warm up", "keep_alive": config.KEEP_ALIVE},
             timeout=120,
         )
-        httpx.post(
-            f"{config.OLLAMA_BASE_URL}/api/generate",
-            json={"model": config.CHAT_MODEL, "keep_alive": config.KEEP_ALIVE},
-            timeout=180,
-        )
+        active = get_registry().active()
+        if active["local"]:  # an online model has nothing to load
+            httpx.post(
+                f"{config.OLLAMA_BASE_URL}/api/generate",
+                json={"model": active["model"], "keep_alive": config.KEEP_ALIVE},
+                timeout=180,
+            )
     except Exception:
         pass  # Ollama may not be running yet; the health pill tells the user
 
@@ -138,11 +142,19 @@ STAGE_LABELS = {
 
 
 @lru_cache(maxsize=1)
+def get_registry() -> ModelRegistry:
+    return ModelRegistry()
+
+
+@lru_cache(maxsize=1)
 def get_resources():
-    """(vector store, error-code table, compiled agent), built once on first use."""
+    """(vector store, error-code table, compiled agent), built once on first use.
+
+    The agent holds a SwitchableLLM, so choosing another model in Model settings applies to the next question.
+    """
     store = get_store()
     code_db = ErrorCodeDB()
-    return store, code_db, build_default_app(store, code_db)
+    return store, code_db, build_default_app(store, code_db, SwitchableLLM(get_registry()))
 
 
 @lru_cache(maxsize=1)
@@ -160,6 +172,8 @@ def probe_ollama() -> list[str] | None:
 
 
 def friendly_error(exc: Exception) -> str:
+    if isinstance(exc, ModelError):
+        return str(exc)  # already written for the engineer
     text = str(exc)
     if "connect" in text.lower() or "refused" in text.lower():
         return "Can't reach the local model. Start Ollama, then try again."
@@ -243,6 +257,7 @@ def _record(feedback: FeedbackStore | None, question: str, device: str, payload:
             sources=[s["label"] for s in payload["sources"]],
             codes=payload.get("codes", []),
             alerts=payload["alerts"],
+            model=(payload.get("model") or {}).get("model"),
         )
     except Exception:
         return None
@@ -257,6 +272,7 @@ def stream_answer(
     cache_key: str | None = None,
     infer_device: bool = True,
     history: list[dict] | None = None,
+    model_info: dict | None = None,
 ):
     started = time.perf_counter()
 
@@ -317,6 +333,8 @@ def stream_answer(
             "alerts": state.get("alerts", []),
             "strength": state.get("strength"),
             "fast": bool(state.get("fast")),
+            # Which model wrote this answer (None when the manual's own steps were shown, so no model ran).
+            "model": None if state.get("fast") else model_info,
             "asked": state.get("question", question),  # the standalone question, used as context for follow-ups
             "device_inferred": state.get("inferred_device"),
             "codes": [r["code"] for r in state.get("code_records", [])],
@@ -384,8 +402,10 @@ async def ask(body: AskBody, request: Request):
     history = [item.model_dump() for item in body.history]
     # An answer that depends on earlier turns can't be reused for the same words asked fresh.
     cache, key = (None, None) if history else (answer_cache, answer_key(question, device, body.infer_device))
+    active = get_registry().active()
+    model_info = {k: active[k] for k in ("provider", "model", "label", "local")}
     events = stream_answer(
-        graph, question, device, get_feedback_store(), cache, key, body.infer_device, history
+        graph, question, device, get_feedback_store(), cache, key, body.infer_device, history, model_info
     )
     return StreamingResponse(
         event_stream(request, events),
@@ -401,11 +421,14 @@ def health():
     def installed(model: str) -> bool:
         return names is not None and any(n == model or n == f"{model}:latest" for n in names)
 
+    active = get_registry().active()
+    # Search always runs on the local embedding model, so Ollama must be up whichever model writes answers.
+    chat_ready = installed(active["model"]) if active["local"] else True
     return {
         "ollama": names is not None,
-        "chat_model": config.CHAT_MODEL,
+        "chat_model": active["model"],
         "embed_model": config.EMBED_MODEL,
-        "ready": installed(config.CHAT_MODEL) and installed(config.EMBED_MODEL),
+        "ready": chat_ready and installed(config.EMBED_MODEL),
     }
 
 
@@ -568,6 +591,94 @@ def scorecard():
     if not path.exists():
         return {"available": False}
     return {"available": True, **json.loads(path.read_text(encoding="utf-8"))}
+
+
+LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost", "testclient"}
+
+
+def require_local(request: Request) -> None:
+    """Changing the model or an API key can spend money and sends data off the machine, and the app has no
+    login, so those changes are only accepted from the computer that runs it."""
+    host = request.client.host if request.client else ""
+    if host not in LOCAL_HOSTS:
+        raise HTTPException(status_code=403, detail="Model settings can only be changed from the computer running Field Assist.")
+
+
+Provider = Literal["ollama", "anthropic", "openai", "gemini", "custom"]
+OnlineProvider = Literal["anthropic", "openai", "gemini", "custom"]
+
+
+class SelectBody(BaseModel):
+    provider: Provider
+    model: str = Field(min_length=1, max_length=100)
+    consent: bool = False  # the engineer confirmed that questions and passages are sent online
+    base_url: str | None = Field(default=None, max_length=300)  # only for the custom provider
+
+
+class KeyBody(BaseModel):
+    provider: OnlineProvider
+    key: SecretStr  # SecretStr keeps the key out of validation errors and logs
+
+
+class TestBody(BaseModel):
+    provider: Provider
+    model: str = Field(min_length=1, max_length=100)
+    base_url: str | None = Field(default=None, max_length=300)
+
+
+class RemoteModelsBody(BaseModel):
+    provider: OnlineProvider
+    base_url: str | None = Field(default=None, max_length=300)
+
+
+@api.get("/api/models")
+def list_models():
+    return get_registry().public()
+
+
+@api.post("/api/models/select")
+def select_model(body: SelectBody, request: Request):
+    require_local(request)
+    try:
+        active = get_registry().select(body.provider, body.model, body.consent, body.base_url)
+    except ModelError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    answer_cache.clear()
+    return {"active": active}
+
+
+@api.post("/api/models/available")
+def available_models(body: RemoteModelsBody, request: Request):
+    require_local(request)  # uses the saved key to ask the provider which models it may use
+    return get_registry().remote_models(body.provider, body.base_url)
+
+
+@api.put("/api/models/key")
+def save_key(body: KeyBody, request: Request):
+    require_local(request)
+    registry = get_registry()
+    try:
+        registry.secrets.set(body.provider, body.key.get_secret_value())
+    except ModelError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    answer_cache.clear()
+    return {"ok": True, "key": registry.secrets.status(body.provider)}  # the hint only, never the key
+
+
+@api.delete("/api/models/key/{provider}")
+def remove_key(provider: OnlineProvider, request: Request):
+    require_local(request)
+    registry = get_registry()
+    registry.secrets.delete(provider)
+    registry.forget_online_choice(provider)  # the confirmation was for this key; a new key must be confirmed again
+    answer_cache.clear()  # and an active online model drops back to local
+    return {"ok": True, "key": registry.secrets.status(provider), "active": registry.active()}
+
+
+@api.post("/api/models/test")
+def test_model(body: TestBody, request: Request):
+    require_local(request)  # an online test spends a (tiny) amount of the key's credit
+    return get_registry().test(body.provider, body.model, body.base_url)
 
 
 # Serve the built frontend last so /api routes win.

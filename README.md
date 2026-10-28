@@ -41,6 +41,30 @@ Expect roughly 10-25 seconds per answer on a CPU-only laptop.
 - **Insights.** Questions per day, what people ask about, fix rate (with how many answers actually got a response), an *estimated* engineer-time saving (answers fixed × minutes you set, never presented as a measurement), gaps in the library (questions with no answer or marked not fixed, grouped), per-document fix rate, the steps that fail most, and the last accuracy check. Data lives locally in `data/feedback.db`; Export CSV and Clear data are on the page. "Preview with sample data" fills the page with clearly labelled **invented** numbers for demos; it replaces the view until removed and never mixes with real data.
 - Light and dark themes, keyboard focus states, reduced-motion support, responsive down to phone width.
 
+## Models and API keys
+
+The header always says which model writes the answers and where it runs (`Local qwen2.5:3b`, or an amber `Online Claude Opus 5.5`), and each answer carries the same label. Answers copied straight from a manual say "Copied from the manual" because no model ran. **Searching your documents always uses the local embedding model**, whichever model writes the answer.
+
+Click the model in the header to change it:
+
+- **On this computer** (default): any chat model installed in Ollama. Nothing leaves the machine and there is no per-question cost.
+- **Online providers**, each with its own key, all opt-in. Each question and the document passages found for it are sent to the provider over the internet and billed to your key, so use them only if company policy allows:
+  - **Anthropic (Claude)**: Opus 5.5, Sonnet 5.5 or Haiku 5.5 through Anthropic's official SDK (list prices are shown in the panel; Haiku is the cheapest).
+  - **OpenAI**: any chat model your key can use. Type the name, or press *Load list* to ask OpenAI which models the key allows.
+  - **Google Gemini**: through Google's OpenAI-compatible endpoint (`generativelanguage.googleapis.com/v1beta/openai/`), same model entry as OpenAI.
+  - **Other (OpenAI-compatible)**: any service that speaks the OpenAI chat format (Azure OpenAI's compatible endpoint, OpenRouter, Groq, Together, a company gateway, LM Studio). Enter its address (https only; plain http is accepted only for this computer) and a key.
+  - Models served from the same machine through an OpenAI-compatible server are better added as "Other" with an `http://localhost:…` address; they stay on the computer, but are labelled online because the app cannot tell.
+
+How keys are handled:
+
+- A key typed into the panel is sent to the server once and stored in the operating system's credential store (Windows Credential Manager). It is never written to a file in the project, never sent back to the browser (the page only ever shows its last four characters), and never appears in an error message.
+- An environment variable, if set, always wins over a saved key and is the better choice for a shared or hosted deployment: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY` or `FIELD_ASSIST_CUSTOM_API_KEY`.
+- Going online needs a saved key **and** an explicit confirmation that questions and passages leave the machine, given again each time the provider changes. Removing the active provider's key drops back to the local model and forgets that confirmation, so a later key must be confirmed again.
+- The model, key and test endpoints only accept requests from the computer running the app, because there is no login. To use the app from other devices, change settings on the host.
+- To lock a deployment to local-only, set `"allow_online_models": false` in `data/policies.json`. To allow only some providers, add `"allowed_online_providers": ["anthropic"]` (any of `anthropic`, `openai`, `gemini`, `custom`); the others are greyed out and refused by the server.
+
+Claude is called with low reasoning effort and, for Opus and Sonnet, the server-side refusal fallback recommended in Anthropic's API guide. The OpenAI-compatible providers receive only the model name and the prompt (no temperature or token limit, which some models reject). **None of the online providers has been called for real yet**: they are tested against faked clients, so the first real call happens when you press **Test connection** with a real key. Gemini's compatible endpoint in particular is untested; a `models/` prefix on a model name is stripped for it.
+
 ## How it works
 
 ```

@@ -129,6 +129,19 @@ export function AnswerView({ answer, activeSource, onCite, onOpenSources, onOpen
             Copied from the manual
           </p>
         )}
+        {answer.model && !answer.fast && (
+          <p
+            className="tag"
+            data-local={answer.model.local}
+            title={
+              answer.model.local
+                ? `Written on this computer by ${answer.model.label}. Nothing left the machine.`
+                : `Written online by ${answer.model.label}. The question and the document passages found for it were sent to the provider over the internet.`
+            }
+          >
+            {answer.model.local ? "On this computer" : "Online"} · {answer.model.label}
+          </p>
+        )}
         {answer.cached && (
           <p className="tag" title="You asked this before and the documents haven't changed.">
             Saved answer
