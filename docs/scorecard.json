@@ -1,0 +1,300 @@
+{
+  "retrieval_hit_rate": 1.0,
+  "retrieval_top1_rate": 0.952,
+  "refusal_rate": 1.0,
+  "alert_rate": 1.0,
+  "error_code_rate": 1.0,
+  "details": [
+    {
+      "kind": "in_scope",
+      "question": "The receipt printer on the POS has a paper jam, what should I do?",
+      "ok": true,
+      "answered": true,
+      "source_ok": true,
+      "phrase_ok": true,
+      "seconds": 0.1
+    },
+    {
+      "kind": "in_scope",
+      "question": "Receipts are printing blank",
+      "ok": true,
+      "answered": true,
+      "source_ok": true,
+      "phrase_ok": true,
+      "seconds": 11.4
+    },
+    {
+      "kind": "in_scope",
+      "question": "Cash drawer will not open after a sale",
+      "ok": true,
+      "answered": true,
+      "source_ok": true,
+      "phrase_ok": true,
+      "seconds": 7.1
+    },
+    {
+      "kind": "in_scope",
+      "question": "How do I clear a note jam in the ATM dispenser?",
+      "ok": true,
+      "answered": true,
+      "source_ok": true,
+      "phrase_ok": true,
+      "seconds": 0.1
+    },
+    {
+      "kind": "in_scope",
+      "question": "ATM cash cassette is not detected",
+      "ok": true,
+      "answered": true,
+      "source_ok": true,
+      "phrase_ok": true,
+      "seconds": 5.8
+    },
+    {
+      "kind": "in_scope",
+      "question": "Who needs to be present when opening the ATM safe?",
+      "ok": true,
+      "answered": true,
+      "source_ok": true,
+      "phrase_ok": true,
+      "seconds": 3.2
+    },
+    {
+      "kind": "in_scope",
+      "question": "Kiosk card reader is not being detected",
+      "ok": true,
+      "answered": true,
+      "source_ok": true,
+      "phrase_ok": true,
+      "seconds": 0.1
+    },
+    {
+      "kind": "in_scope",
+      "question": "Kiosk card reader gives repeated read errors",
+      "ok": true,
+      "answered": true,
+      "source_ok": true,
+      "phrase_ok": true,
+      "seconds": 7.6
+    },
+    {
+      "kind": "in_scope",
+      "question": "Kiosk touchscreen touches are offset",
+      "ok": true,
+      "answered": true,
+      "source_ok": true,
+      "phrase_ok": true,
+      "seconds": 7.0
+    },
+    {
+      "kind": "in_scope",
+      "question": "Device has IP address 169.254.x.x and cannot reach the host",
+      "ok": true,
+      "answered": true,
+      "source_ok": true,
+      "phrase_ok": true,
+      "seconds": 0.1
+    },
+    {
+      "kind": "in_scope",
+      "question": "Payment host timeouts but ping works",
+      "ok": true,
+      "answered": true,
+      "source_ok": true,
+      "phrase_ok": true,
+      "seconds": 0.1
+    },
+    {
+      "kind": "in_scope",
+      "question": "Several devices at one site lost connectivity at once",
+      "ok": true,
+      "answered": true,
+      "source_ok": true,
+      "phrase_ok": true,
+      "seconds": 7.4
+    },
+    {
+      "kind": "in_scope",
+      "question": "How many notes can an ATM cassette hold?",
+      "ok": true,
+      "answered": true,
+      "source_ok": true,
+      "phrase_ok": true,
+      "seconds": 10.5
+    },
+    {
+      "kind": "in_scope",
+      "question": "How do I reset the cassette counters after refilling?",
+      "ok": true,
+      "answered": true,
+      "source_ok": true,
+      "phrase_ok": true,
+      "seconds": 5.5
+    },
+    {
+      "kind": "in_scope",
+      "question": "What if the counted notes don't match the cash sheet?",
+      "ok": true,
+      "answered": true,
+      "source_ok": true,
+      "phrase_ok": true,
+      "seconds": 10.9
+    },
+    {
+      "kind": "in_scope",
+      "question": "How do I roll back a failed kiosk firmware update?",
+      "ok": true,
+      "answered": true,
+      "source_ok": true,
+      "phrase_ok": true,
+      "seconds": 15.1
+    },
+    {
+      "kind": "in_scope",
+      "question": "Kiosk firmware download stops at 40 percent",
+      "ok": true,
+      "answered": true,
+      "source_ok": true,
+      "phrase_ok": true,
+      "seconds": 13.2
+    },
+    {
+      "kind": "in_scope",
+      "question": "Which firmware version needs a Rev C card reader?",
+      "ok": false,
+      "answered": true,
+      "source_ok": true,
+      "phrase_ok": false,
+      "seconds": 15.7
+    },
+    {
+      "kind": "in_scope",
+      "question": "What is the part number for the ATM pick roller kit?",
+      "ok": true,
+      "answered": true,
+      "source_ok": true,
+      "phrase_ok": true,
+      "seconds": 4.3
+    },
+    {
+      "kind": "in_scope",
+      "question": "How often should the kiosk dust filter be replaced?",
+      "ok": true,
+      "answered": true,
+      "source_ok": true,
+      "phrase_ok": true,
+      "seconds": 1.8
+    },
+    {
+      "kind": "in_scope",
+      "question": "The customer display flickers during a sale",
+      "ok": true,
+      "answered": true,
+      "source_ok": true,
+      "phrase_ok": true,
+      "seconds": 9.9
+    },
+    {
+      "kind": "out_of_scope",
+      "question": "What is the best recipe for sourdough bread?",
+      "ok": true
+    },
+    {
+      "kind": "out_of_scope",
+      "question": "Who won the football match yesterday?",
+      "ok": true
+    },
+    {
+      "kind": "out_of_scope",
+      "question": "How do I reset my email password?",
+      "ok": true
+    },
+    {
+      "kind": "out_of_scope",
+      "question": "What is the capital of France?",
+      "ok": true
+    },
+    {
+      "kind": "out_of_scope",
+      "question": "Write me a poem about the ocean",
+      "ok": true
+    },
+    {
+      "kind": "out_of_scope",
+      "question": "How do I change the Wi-Fi password on my home router?",
+      "ok": true
+    },
+    {
+      "kind": "critical",
+      "question": "ATM shows A-2002",
+      "ok": true,
+      "alerts": [
+        "code-A-2002"
+      ]
+    },
+    {
+      "kind": "critical",
+      "question": "A-4001 PIN pad encryption key error",
+      "ok": true,
+      "alerts": [
+        "code-A-4001",
+        "encryption-keys"
+      ]
+    },
+    {
+      "kind": "critical",
+      "question": "I think there is a skimmer on the card slot",
+      "ok": true,
+      "alerts": [
+        "tampering"
+      ]
+    },
+    {
+      "kind": "critical",
+      "question": "The counted notes differ from the cash sheet",
+      "ok": true,
+      "alerts": [
+        "cash-discrepancy"
+      ]
+    },
+    {
+      "kind": "critical",
+      "question": "I need to open the safe door and refill the cassette",
+      "ok": true,
+      "alerts": [
+        "two-person-control"
+      ]
+    },
+    {
+      "kind": "error_code",
+      "question": "I'm getting P-1002 on the terminal",
+      "ok": true
+    },
+    {
+      "kind": "error_code",
+      "question": "ATM shows A-1003",
+      "ok": true
+    },
+    {
+      "kind": "error_code",
+      "question": "Kiosk error K-7002 after the update",
+      "ok": true
+    }
+  ],
+  "answer_pass_rate": 0.952,
+  "traced_rate": 0.937,
+  "median_seconds": 4.3,
+  "date": "2026-10-28",
+  "model": "qwen2.5:3b",
+  "embed_model": "nomic-embed-text",
+  "corpus": {
+    "documents": 8,
+    "chunks": 44
+  },
+  "questions": {
+    "in_scope": 21,
+    "out_of_scope": 6,
+    "critical": 5,
+    "error_codes": 3
+  }
+}
