@@ -143,7 +143,7 @@ export function EvidenceDock({ open, overlay, ...content }: DockProps) {
       className="evidence"
       aria-label="Sources"
       initial={false}
-      animate={{ width: open ? 380 : 0 }}
+      animate={{ width: open ? 330 : 0 }}
       transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
       inert={!open}
       style={{ borderLeftWidth: open ? 1 : 0 }}

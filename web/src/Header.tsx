@@ -36,7 +36,7 @@ export function Header(p: Props) {
     <header className="app-header">
       <div className="brand">
         <span className="brand-mark">
-          <Arcs count={3} size={22} strokeWidth={11} />
+          <Arcs count={3} size={18} strokeWidth={11} />
         </span>
         <span className="brand-name">Field Assist</span>
       </div>
