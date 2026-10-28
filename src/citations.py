@@ -23,6 +23,21 @@ def _words(text: str) -> set[str]:
     return {w for w in re.findall(r"[a-z0-9]+", text.lower()) if len(w) > 2 and w not in _STOPWORDS}
 
 
+def _step_citations(step_text: str, source_words: list[set[str]]) -> list[int]:
+    """1-based numbers of the sources that contain this step, best first."""
+    step_words = _words(step_text)
+    if not step_words:
+        return []
+    scored = sorted(
+        ((len(step_words & words) / len(step_words), number) for number, words in enumerate(source_words, 1)),
+        key=lambda pair: (-pair[0], pair[1]),
+    )
+    # A second citation must be nearly as strong as the best one, so a few shared common
+    # words in an unrelated passage don't produce a bogus extra source.
+    cutoff = max(MATCH_THRESHOLD, scored[0][0] - SECONDARY_MARGIN) if scored else MATCH_THRESHOLD
+    return [number for score, number in scored[:MAX_CITATIONS] if score >= cutoff]
+
+
 def attribute(answer: str, source_texts: list[str]) -> tuple[str, int, int]:
     """Return (answer with [n] added to supported steps, matched steps, unmatched steps)."""
     source_words = [_words(text) for text in source_texts]
@@ -31,15 +46,7 @@ def attribute(answer: str, source_texts: list[str]) -> tuple[str, int, int]:
         if not _STEP.match(line):
             lines.append(line)
             continue
-        step_words = _words(_STEP.sub("", line, count=1))
-        scored = sorted(
-            ((len(step_words & words) / len(step_words), number) for number, words in enumerate(source_words, 1)),
-            key=lambda pair: (-pair[0], pair[1]),
-        ) if step_words else []
-        # A second citation must be nearly as strong as the best one, so a few shared common
-        # words in an unrelated passage don't produce a bogus extra source.
-        cutoff = max(MATCH_THRESHOLD, scored[0][0] - SECONDARY_MARGIN) if scored else MATCH_THRESHOLD
-        hits = [number for score, number in scored[:MAX_CITATIONS] if score >= cutoff]
+        hits = _step_citations(_STEP.sub("", line, count=1), source_words)
         if hits:
             lines.append(line.rstrip() + " " + " ".join(f"[{n}]" for n in hits))
             matched += 1
@@ -47,3 +54,23 @@ def attribute(answer: str, source_texts: list[str]) -> tuple[str, int, int]:
             lines.append(line)
             unmatched += 1
     return "\n".join(lines), matched, unmatched
+
+
+def analyze(answer: str, source_texts: list[str]) -> list[dict]:
+    """The same attribution as structured blocks for a UI.
+
+    Each block is {"kind": "step" | "text", "text", "cites": [n, ...], "supported": bool | None}.
+    Blank lines are dropped and list markers are removed from step text.
+    """
+    source_words = [_words(text) for text in source_texts]
+    blocks = []
+    for line in _MODEL_CITATION.sub("", answer).splitlines():
+        if not line.strip():
+            continue
+        if not _STEP.match(line):
+            blocks.append({"kind": "text", "text": line.strip(), "cites": [], "supported": None})
+            continue
+        text = _STEP.sub("", line, count=1).strip()
+        cites = _step_citations(text, source_words)
+        blocks.append({"kind": "step", "text": text, "cites": cites, "supported": bool(cites)})
+    return blocks

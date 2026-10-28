@@ -24,7 +24,9 @@ class IngestResult:
 def get_embeddings():
     from langchain_ollama import OllamaEmbeddings
 
-    return OllamaEmbeddings(model=config.EMBED_MODEL, base_url=config.OLLAMA_BASE_URL)
+    return OllamaEmbeddings(
+        model=config.EMBED_MODEL, base_url=config.OLLAMA_BASE_URL, keep_alive=config.KEEP_ALIVE
+    )
 
 
 def get_store(embeddings=None, persist_dir: str | Path | None = None) -> Chroma:

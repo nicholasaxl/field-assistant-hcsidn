@@ -14,6 +14,9 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 CHAT_MODEL = os.getenv("CHAT_MODEL", "qwen2.5:3b")
 EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
 NUM_CTX = int(os.getenv("NUM_CTX", "4096"))
+# Seconds Ollama keeps a model in memory after its last use. Ollama's default (5 minutes) means the
+# first question after a short break pays a ~25 s reload on CPU.
+KEEP_ALIVE = int(os.getenv("KEEP_ALIVE", "1800"))
 
 # Chunking and retrieval
 CHUNK_SIZE = 800

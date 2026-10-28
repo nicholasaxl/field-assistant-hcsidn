@@ -15,7 +15,7 @@ from langgraph.graph import END, START, StateGraph
 
 import config
 from src import prompts
-from src.citations import attribute
+from src.citations import analyze, attribute
 from src.error_lookup import ErrorCodeDB
 
 
@@ -28,6 +28,7 @@ class AgentState(TypedDict, total=False):
     code_records: list
     answer: str
     sources: list
+    blocks: list  # structured answer for the UI: steps with their citations
     retries: int
     trace: list
 
@@ -118,9 +119,21 @@ def build_graph(
             {
                 "label": f"Error code {r['code']} ({r['device_model']})",
                 "text": f"{r['meaning']} Fix: {r['fix']} Severity: {r['severity']}",
+                "kind": "error_code",
+                "distance": None,
+                "device": r["device_model"],
             }
             for r in state["code_records"]
-        ] + [{"label": _doc_label(d), "text": d.page_content} for d in state["docs"]]
+        ] + [
+            {
+                "label": _doc_label(d),
+                "text": d.page_content,
+                "kind": "document",
+                "distance": d.metadata.get("distance"),
+                "device": d.metadata.get("device_model"),
+            }
+            for d in state["docs"]
+        ]
         context = "\n\n".join(f"[{i}] ({s['label']}) {s['text']}" for i, s in enumerate(sources, start=1))
         answer = _text(llm.invoke(prompts.ANSWER.format(context=context, question=state["question"]))).strip()
         return {"answer": answer, "sources": sources, "trace": state["trace"] + ["generate"]}
@@ -136,6 +149,7 @@ def build_graph(
         )
         return {
             "answer": f"{answer}{note}\n\n**Sources**\n" + "\n".join(lines),
+            "blocks": analyze(state["answer"], [s["text"] for s in sources]),
             "trace": state["trace"] + [f"citations: {matched} step(s) matched, {unmatched} unmatched"],
         }
 
@@ -185,6 +199,7 @@ def make_llm():
         base_url=config.OLLAMA_BASE_URL,
         temperature=0,
         num_ctx=config.NUM_CTX,
+        keep_alive=config.KEEP_ALIVE,
     )
 
 
