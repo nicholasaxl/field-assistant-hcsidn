@@ -12,9 +12,19 @@ type Props = {
   onOpenLibrary: () => void;
   onSearchAll: () => void;
   canSearchAll: boolean;
+  onClarify: (option: string, kind: "device" | "detail") => void;
 };
 
-export function TurnView({ turn, activeSource, onCite, onOpenSources, onOpenLibrary, onSearchAll, canSearchAll }: Props) {
+export function TurnView({
+  turn,
+  activeSource,
+  onCite,
+  onOpenSources,
+  onOpenLibrary,
+  onSearchAll,
+  canSearchAll,
+  onClarify,
+}: Props) {
   const inferred = turn.answer?.device_inferred ?? null;
   return (
     <article className="turn" aria-busy={turn.status === "running"}>
@@ -37,6 +47,24 @@ export function TurnView({ turn, activeSource, onCite, onOpenSources, onOpenLibr
       {turn.stages.length > 0 || turn.status === "running" ? (
         <Timeline stages={turn.stages} running={turn.status === "running"} elapsed={turn.answer?.elapsed} />
       ) : null}
+
+      {turn.status === "done" && turn.clarify && (
+        <div className="clarify" role="status">
+          <p className="clarify-prompt">{turn.clarify.prompt}</p>
+          {turn.clarify.options.length > 0 && (
+            <div className="reason-chips">
+              {turn.clarify.options.map((option) => (
+                <button key={option} className="reason-chip" onClick={() => onClarify(option, turn.clarify!.kind)}>
+                  {deviceLabel(option)}
+                </button>
+              ))}
+            </div>
+          )}
+          {turn.clarify.kind === "detail" && (
+            <p className="inferred-note">Pick the device, then describe what you see in the box below.</p>
+          )}
+        </div>
+      )}
 
       {turn.status === "done" && turn.answer && (
         <AnswerView

@@ -17,12 +17,13 @@ from typing import Literal
 import anyio
 import httpx
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 import config
 from src import prompts
+from src.conversation import MAX_HISTORY
 from src.error_lookup import ErrorCodeDB
 from src.feedback import FeedbackStore
 from src.graph import build_default_app
@@ -120,6 +121,8 @@ async def lifespan(_app: FastAPI):
 api = FastAPI(title="Field Assist API", lifespan=lifespan)
 
 STAGE_LABELS = {
+    "contextualize": "Reading the conversation",
+    "clarify": "Need a bit more detail",
     "classify": "Reading the question",
     "lookup_code": "Matching the error code",
     "retrieve": "Searching the manuals",
@@ -167,6 +170,10 @@ def describe_stage(node: str, update: dict, state: dict) -> str:
     """One short, plain-language line about what a stage just did."""
     trace = update.get("trace") or [""]
     last = trace[-1]
+    if node == "contextualize":
+        return "Looking for what to try next" if update.get("failure_followup") else "Following on from your last question"
+    if node == "clarify":
+        return (update.get("clarify") or {}).get("prompt", "")
     if node == "classify":
         where = f", looking at {update['inferred_device']}" if update.get("inferred_device") else ""
         if update.get("intent") == "error_code":
@@ -249,6 +256,7 @@ def stream_answer(
     cache: AnswerCache | None = None,
     cache_key: str | None = None,
     infer_device: bool = True,
+    history: list[dict] | None = None,
 ):
     started = time.perf_counter()
 
@@ -268,7 +276,12 @@ def stream_answer(
             yield sse({**saved, "type": "answer", "interaction_id": interaction_id, "cached": True, "elapsed": 0.0})
             return
 
-    state: dict = {"question": question, "device_model": device_model, "infer_device": infer_device}
+    state: dict = {
+        "question": question,
+        "device_model": device_model,
+        "infer_device": infer_device,
+        "history": history or [],
+    }
     stage_log: list[dict] = []
     try:
         for chunk in graph.stream(dict(state), stream_mode="updates"):
@@ -276,6 +289,8 @@ def stream_answer(
                 update = update or {}
                 detail = describe_stage(node, update, state)
                 state.update(update)
+                if node == "contextualize" and not update.get("followup"):
+                    continue  # nothing to report for a question that stands on its own
                 at = round(time.perf_counter() - started, 1)
                 stage_log.append({"node": node, "at": at})
                 yield sse(
@@ -287,10 +302,14 @@ def stream_answer(
                         "at": at,
                     }
                 )
-        answer = state.get("answer", "")
         elapsed = round(time.perf_counter() - started, 1)
+        if state.get("clarify"):  # a question back to the engineer: not an answer, so not logged or saved
+            yield sse({"type": "clarify", **state["clarify"], "elapsed": elapsed})
+            return
+        answer = state.get("answer", "")
         payload = {
-            "fallback": answer == prompts.FALLBACK,
+            "fallback": answer in (prompts.FALLBACK, prompts.EXHAUSTED),
+            "exhausted": answer == prompts.EXHAUSTED,
             "intent": state.get("intent"),
             "text": answer,
             "blocks": state.get("blocks", []),
@@ -298,6 +317,7 @@ def stream_answer(
             "alerts": state.get("alerts", []),
             "strength": state.get("strength"),
             "fast": bool(state.get("fast")),
+            "asked": state.get("question", question),  # the standalone question, used as context for follow-ups
             "device_inferred": state.get("inferred_device"),
             "codes": [r["code"] for r in state.get("code_records", [])],
         }
@@ -336,10 +356,24 @@ async def event_stream(request: Request, events):
         await anyio.to_thread.run_sync(iterator.close)
 
 
+class HistoryItem(BaseModel):
+    """One earlier turn, kept short: just enough to understand "that didn't work"."""
+
+    question: str = Field(max_length=2000)
+    device: str = Field(default=config.ALL_DEVICES, max_length=100)
+    sources: list[str] = Field(default_factory=list, max_length=8)
+
+    @field_validator("sources")
+    @classmethod
+    def _trim_labels(cls, labels: list[str]) -> list[str]:
+        return [label[:300] for label in labels]
+
+
 class AskBody(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     device_model: str = config.ALL_DEVICES
     infer_device: bool = True  # false: the engineer asked to search every device, so don't guess
+    history: list[HistoryItem] = Field(default_factory=list, max_length=MAX_HISTORY)
 
 
 @api.post("/api/ask")
@@ -347,14 +381,11 @@ async def ask(body: AskBody, request: Request):
     _, _, graph = await anyio.to_thread.run_sync(get_resources)
     question = body.question.strip()
     device = body.device_model or config.ALL_DEVICES
+    history = [item.model_dump() for item in body.history]
+    # An answer that depends on earlier turns can't be reused for the same words asked fresh.
+    cache, key = (None, None) if history else (answer_cache, answer_key(question, device, body.infer_device))
     events = stream_answer(
-        graph,
-        question,
-        device,
-        get_feedback_store(),
-        answer_cache,
-        answer_key(question, device, body.infer_device),
-        body.infer_device,
+        graph, question, device, get_feedback_store(), cache, key, body.infer_device, history
     )
     return StreamingResponse(
         event_stream(request, events),
@@ -419,6 +450,23 @@ def upload_documents(files: list[UploadFile] = File(...), device_model: str = Fo
             results.append({"name": name, "status": "error", "message": friendly_error(exc)})
     bump_library_version()  # saved answers may no longer reflect the documents
     return {"results": results}
+
+
+@api.get("/api/files/{name}")
+def open_file(name: str):
+    """The original document, read-only. PDFs open in the browser (add #page=N); other types download."""
+    if Path(name).name != name:
+        raise HTTPException(status_code=400, detail="Invalid document name")
+    path = config.MANUALS_DIR / name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail=f"'{name}' is not in the library")
+    inline = path.suffix.lower() == ".pdf"
+    return FileResponse(
+        path,
+        filename=None if inline else name,
+        media_type="application/pdf" if inline else None,
+        headers={"Content-Disposition": f'inline; filename="{name}"'} if inline else None,
+    )
 
 
 @api.delete("/api/documents/{source}")

@@ -1,0 +1,100 @@
+/* ---------- Follow-ups, clarifying questions, guided mode ---------- */
+.followups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  max-width: 780px;
+  margin: 0 auto 10px;
+  overflow: hidden;
+}
+.clarify {
+  display: grid;
+  gap: 12px;
+  max-width: 62ch;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: var(--r-md);
+  background: var(--accent-soft);
+}
+.clarify-prompt {
+  font-weight: 600;
+}
+.clarify .inferred-note {
+  margin: 0;
+}
+
+.guided {
+  display: grid;
+  gap: 14px;
+  max-width: 62ch;
+}
+.guided-rail {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.guided-dot {
+  flex: 1;
+  height: 6px;
+  max-width: 56px;
+  border-radius: 3px;
+  background: var(--line-strong);
+  transition: background-color 0.3s, transform 0.3s var(--ease);
+}
+.guided-dot[data-state="current"] {
+  background: color-mix(in srgb, var(--accent) 45%, var(--line-strong));
+  transform: scaleY(1.5);
+}
+.guided-dot[data-state="done"] {
+  background: var(--accent);
+}
+.guided-dot[data-state="failed"] {
+  background: var(--warn);
+}
+.guided-card {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.guided-count {
+  color: var(--ink-2);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.guided-text {
+  font-size: 19px;
+  line-height: 1.5;
+  letter-spacing: -0.005em;
+  overflow-wrap: anywhere;
+}
+.guided-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.guided-actions .primary-btn {
+  height: 44px;
+  padding: 0 22px;
+}
+.guided-actions .pill-btn {
+  height: 44px;
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.guided-back {
+  margin: 0 0 0 4px;
+}
+.guided-exit {
+  justify-self: start;
+  margin: 0;
+}

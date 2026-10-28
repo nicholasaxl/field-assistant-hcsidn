@@ -28,6 +28,11 @@ Question: {question}
 
 Answer:"""
 
+EXHAUSTED = (
+    "I've run out of documented steps for this problem. Escalate it with a handoff summary so the next person "
+    "starts from what you've already tried."
+)
+
 FALLBACK = (
     "I couldn't find this in the indexed documents. Try rephrasing with the device model or error code, "
     "check that the relevant manual has been uploaded, or escalate to level 2 support."

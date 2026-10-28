@@ -6,6 +6,7 @@ import App from "./App";
 import "./styles.css";
 import "./feedback.css";
 import "./insights.css";
+import "./conversation.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

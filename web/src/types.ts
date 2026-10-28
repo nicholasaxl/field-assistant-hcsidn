@@ -11,6 +11,8 @@ export type Source = {
   kind: "error_code" | "document";
   distance: number | null;
   device: string | null;
+  file?: string | null;
+  page?: number | null;
 };
 
 export type Stage = { node: string; label: string; detail: string; at: number };
@@ -22,7 +24,12 @@ export type Strength = { level: "strong" | "good" | "check"; label: string; reas
 export type Reason = "step_failed" | "different_problem" | "doc_wrong" | "need_person";
 export type Outcome = "fixed" | "not_fixed" | "escalated";
 
+export type Clarify = { kind: "device" | "detail"; prompt: string; options: string[] };
+export type HistoryItem = { question: string; device: string; sources: string[] };
+
 export type AnswerData = {
+  exhausted: boolean;
+  asked: string;
   fast: boolean;
   cached: boolean;
   device_inferred: string | null;
@@ -45,12 +52,14 @@ export type Turn = {
   status: "running" | "done" | "error";
   stages: Stage[];
   answer?: AnswerData;
+  clarify?: Clarify;
   error?: string;
 };
 
 export type StreamEvent =
   | ({ type: "stage" } & Stage)
   | ({ type: "answer" } & AnswerData)
+  | ({ type: "clarify"; elapsed: number } & Clarify)
   | { type: "error"; message: string };
 
 export type DocInfo = { source: string; type: string; device_model: string; chunks: number };

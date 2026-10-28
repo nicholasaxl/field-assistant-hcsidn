@@ -20,6 +20,10 @@ function applyEvent(turn: Turn, event: StreamEvent): Turn {
       const { type: _type, ...answer } = event;
       return { ...turn, status: "done", answer };
     }
+    case "clarify": {
+      const { type: _type, elapsed: _elapsed, ...clarify } = event;
+      return { ...turn, status: "done", clarify };
+    }
     case "error":
       return { ...turn, status: "error", error: event.message };
   }
@@ -43,6 +47,8 @@ export default function App() {
 
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const turnsRef = useRef(turns);
+  turnsRef.current = turns;
   const running = turns.some((t) => t.status === "running");
 
   const refreshLibrary = useCallback(async () => {
@@ -79,6 +85,15 @@ export default function App() {
       const id = newId();
       const chosen = options?.device ?? device;
       const infer = options?.infer ?? true;
+      // The last few answered turns let the server understand "that didn't work".
+      const history = turnsRef.current
+        .filter((t) => t.status === "done" && t.answer && !t.answer.fallback)
+        .slice(-3)
+        .map((t) => ({
+          question: t.answer!.asked || t.question,
+          device: t.answer!.device_inferred ?? t.device,
+          sources: t.answer!.sources.map((s) => s.label),
+        }));
       setTurns((t) => [...t, { id, question: text, device: chosen, infer, status: "running", stages: [] }]);
       setDraft("");
       const controller = new AbortController();
@@ -86,7 +101,7 @@ export default function App() {
 
       const update = (fn: (t: Turn) => Turn) => setTurns((ts) => ts.map((t) => (t.id === id ? fn(t) : t)));
       try {
-        await askStream(text, chosen, infer, (event) => update((t) => applyEvent(t, event)), controller.signal);
+        await askStream(text, chosen, infer, history, (event) => update((t) => applyEvent(t, event)), controller.signal);
         update((t) =>
           t.status === "running" ? { ...t, status: "error", error: "The connection closed before an answer arrived." } : t,
         );
@@ -115,6 +130,21 @@ export default function App() {
 
   const evidenceTurn = useMemo(() => turns.find((t) => t.id === evidence?.turnId), [turns, evidence]);
   const latestWithSources = useMemo(() => [...turns].reverse().find((t) => t.answer && t.answer.sources.length > 0), [turns]);
+
+  const lastTurn = turns[turns.length - 1];
+  const followups =
+    !running && lastTurn?.status === "done" && lastTurn.answer && !lastTurn.answer.fallback && lastTurn.answer.blocks.some((b) => b.kind === "step")
+      ? ["That didn't work", "It still shows the same error"]
+      : [];
+
+  function handleClarify(turn: Turn, option: string, kind: "device" | "detail") {
+    if (kind === "device") {
+      void ask(turn.question, { device: option, infer: false });
+    } else {
+      setDevice(option);
+      document.getElementById("question")?.focus();
+    }
+  }
 
   const openSources = (turnId: string, n: number | null) => setEvidence({ turnId, n, open: true });
   const sourcesOpen = Boolean(evidence?.open && evidenceTurn?.answer);
@@ -156,6 +186,7 @@ export default function App() {
                     onOpenLibrary={() => setLibraryOpen(true)}
                     onSearchAll={() => void ask(turn.question, { device: "all", infer: false })}
                     canSearchAll={!running}
+                    onClarify={(option, kind) => handleClarify(turn, option, kind)}
                   />
                 ))
               )}
@@ -171,6 +202,9 @@ export default function App() {
             devices={devices}
             device={device}
             onDevice={setDevice}
+            followups={followups}
+            onFollowup={(text) => void ask(text)}
+            hasConversation={turns.length > 0}
           />
         </div>
 

@@ -21,9 +21,16 @@ const PANEL = {
 };
 
 /** The closed loop: did the answer fix it? A "no" asks why and produces an escalation summary. */
-export function FeedbackBar({ interactionId, noAnswer = false }: { interactionId: string; noAnswer?: boolean }) {
-  const [phase, setPhase] = useState<Phase>("ask");
-  const [reason, setReason] = useState<Reason | null>(null);
+type FeedbackBarProps = {
+  interactionId: string;
+  noAnswer?: boolean;
+  initialPhase?: Phase;
+  initialReason?: Reason;
+};
+
+export function FeedbackBar({ interactionId, noAnswer = false, initialPhase = "ask", initialReason }: FeedbackBarProps) {
+  const [phase, setPhase] = useState<Phase>(initialPhase);
+  const [reason, setReason] = useState<Reason | null>(initialReason ?? null);
   const [note, setNote] = useState("");
   const [handoff, setHandoff] = useState("");
   const [escalated, setEscalated] = useState(false);

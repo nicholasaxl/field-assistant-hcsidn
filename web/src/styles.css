@@ -900,6 +900,11 @@ p {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+.source-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
 .link-btn {
   margin: 6px 0 0 36px;
   padding: 0;

@@ -30,6 +30,11 @@ CHUNK_SIZE = 800
 CHUNK_OVERLAP = 100
 TOP_K = 4
 MAX_RETRIES = 2  # query rewrites before giving up
+# A rewritten query must match this much more closely than the original (the model can rewrite an unrelated
+# question into something that happens to sit near a document), and a question this far past the cutoff is not
+# worth a retry at all.
+REWRITE_TIGHTEN = float(os.getenv("REWRITE_TIGHTEN", "0.05"))
+REWRITE_MAX_OVERSHOOT = float(os.getenv("REWRITE_MAX_OVERSHOOT", "0.12"))
 # If even the best chunk is farther than this (Chroma L2 distance), the question is treated as
 # out of scope. Tuned for nomic-embed-text on the sample docs (in-scope 0.4-0.8, unrelated 0.95+);
 # re-tune with `python -m src.evaluate` if you change the embedding model.
@@ -41,6 +46,10 @@ STRONG_DISTANCE = float(os.getenv("STRONG_DISTANCE", "0.7"))
 FAST_PATH = os.getenv("FAST_PATH", "1") == "1"
 FAST_PATH_DISTANCE = float(os.getenv("FAST_PATH_DISTANCE", "0.6"))
 CACHE_SIZE = int(os.getenv("CACHE_SIZE", "64"))  # saved answers kept in memory; 0 turns the cache off
+
+# Clarifying questions: ask "which device?" only when two devices' best passages are this close (and none is strong).
+CLARIFY_MARGIN = float(os.getenv("CLARIFY_MARGIN", "0.04"))
+CLARIFY_WEAK = float(os.getenv("CLARIFY_WEAK", "0.45"))
 
 # Retrieval. Keyword (BM25) search is fused with vector search so part numbers and codes match exactly.
 HYBRID_SEARCH = os.getenv("HYBRID_SEARCH", "1") == "1"

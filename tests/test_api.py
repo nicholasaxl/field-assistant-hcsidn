@@ -1,44 +1,8 @@
 import json
-import uuid
-
-import pytest
-from fastapi.testclient import TestClient
-from langchain_chroma import Chroma
-from langchain_core.embeddings import DeterministicFakeEmbedding
 
 import config
 from src import api as api_module
 from src import prompts
-from src.error_lookup import ErrorCodeDB
-from src.feedback import FeedbackStore
-from src.graph import build_graph
-from src.retriever import retrieve
-
-
-class ScriptedLLM:
-    def invoke(self, prompt):
-        if prompt.startswith("You are checking"):
-            return "1"
-        if prompt.startswith("Rewrite this"):
-            return "printer jam"
-        return "1. Open the cover and remove the paper.\n2. Reboot the mainframe."
-
-
-@pytest.fixture
-def client(monkeypatch, tmp_path):
-    store = Chroma(
-        collection_name=f"api_{uuid.uuid4().hex}", embedding_function=DeterministicFakeEmbedding(size=32)
-    )
-    code_db = ErrorCodeDB()
-    graph = build_graph(ScriptedLLM(), lambda q, device: retrieve(q, store, device), code_db)
-    monkeypatch.setattr(api_module, "get_resources", lambda: (store, code_db, graph))
-    monkeypatch.setattr(config, "MANUALS_DIR", tmp_path / "manuals")
-    monkeypatch.setattr(config, "RELEVANCE_MAX_DISTANCE", 100.0)  # fake embeddings have no real geometry
-    feedback = FeedbackStore(":memory:")  # never touch the real data/feedback.db from tests
-    monkeypatch.setattr(api_module, "get_feedback_store", lambda: feedback)
-    test_client = TestClient(api_module.api)
-    test_client.feedback = feedback
-    return test_client
 
 
 def events(response):
@@ -68,6 +32,25 @@ def test_upload_list_and_delete(client):
     assert client.get("/api/documents").json()["documents"] == []
     assert not (config.MANUALS_DIR / "runbook.md").exists()
     assert client.delete("/api/documents/runbook.md").status_code == 404
+
+
+def test_original_documents_can_be_opened_read_only(client):
+    upload(client, name="runbook.md")
+    upload(client, name="manual.pdf", text="%PDF-1.4 minimal")  # not parseable, so it won't be indexed
+    (config.MANUALS_DIR / "manual.pdf").write_bytes(b"%PDF-1.4 minimal")
+    markdown = client.get("/api/files/runbook.md")
+    assert markdown.status_code == 200 and "attachment" in markdown.headers["content-disposition"]
+    pdf = client.get("/api/files/manual.pdf")
+    assert pdf.headers["content-type"] == "application/pdf" and pdf.headers["content-disposition"].startswith("inline")
+    assert client.get("/api/files/missing.md").status_code == 404
+    assert client.get("/api/files/..%2Fconftest.py").status_code in (400, 404)
+    assert client.put("/api/files/runbook.md").status_code in (404, 405)  # read-only
+
+
+def test_sources_carry_the_file_and_page_so_the_ui_can_link_to_them(client):
+    upload(client)
+    final = events(client.post("/api/ask", json={"question": "printer jam"}))[-1]
+    assert final["sources"][0]["file"] == "runbook.md" and "page" in final["sources"][0]
 
 
 def test_bad_uploads_are_reported_per_file(client):

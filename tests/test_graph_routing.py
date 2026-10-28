@@ -172,6 +172,20 @@ def test_a_strong_match_skips_the_relevance_model_but_still_writes_the_answer():
     assert any("grade: skipped (strong match)" in t for t in state["trace"])
 
 
+def test_a_strong_match_keeps_the_sibling_sections_of_the_same_document():
+    def chunk(source, section, distance, text):
+        return Document(page_content=text, metadata={"source": source, "section": section, "distance": distance})
+
+    docs = [
+        chunk("display.md", "Symptom", 0.26, "The display flickers."),
+        chunk("display.md", "Fix", 0.48, "Reseat the cable."),  # further away, but the actual answer
+        chunk("other.md", "Unrelated", 0.50, "Something else."),  # also far, from another document
+    ]
+    app, _ = make_app(FakeLLM("NONE"), docs)
+    state = ask(app, "the customer display flickers")
+    assert [s["label"] for s in state["sources"]] == ["display.md, Symptom", "display.md, Fix"]
+
+
 def test_device_is_inferred_and_used_for_the_search():
     seen = []
 
@@ -218,6 +232,31 @@ def test_policy_function_is_injectable():
     state = ask(app, "printer jam")
     assert state["alerts"][0]["id"] == "x"
     assert seen["question"] == "printer jam" and "Open the cover" in seen["text"]
+
+
+def test_a_question_nowhere_near_any_document_skips_the_rewrite_entirely():
+    way_off = Document(page_content="x", metadata={"source": "o.md", "distance": config.RELEVANCE_MAX_DISTANCE + 0.4})
+    llm = FakeLLM("1")
+    app, seen = make_app(llm, [way_off], max_retries=2)
+    state = ask(app, "what is the capital of France")
+    assert state["answer"] == prompts.FALLBACK
+    assert len(seen) == 1 and not any(c.startswith("Rewrite this") for c in llm.calls)  # no pointless retries
+
+
+def test_a_rewritten_query_must_match_more_closely_than_the_original():
+    """Stops the model rewriting an unrelated question into something that merely sits near a document."""
+    borderline = config.RELEVANCE_MAX_DISTANCE - 0.02  # passes the normal bar, fails the stricter retry bar
+    first = Document(page_content="x", metadata={"source": "o.md", "distance": config.RELEVANCE_MAX_DISTANCE + 0.05})
+    retry = Document(page_content="Open the cover.", metadata={"source": "o.md", "section": "S", "distance": borderline})
+    answers = iter([[first], [retry], [retry]])
+    app = build_graph(FakeLLM("1"), lambda q, d: next(answers), ErrorCodeDB(), max_retries=2)
+    state = ask(app, "change the wifi password on my home router")
+    assert state["answer"] == prompts.FALLBACK
+    assert any("out of scope" in t for t in state["trace"][-4:])
+
+    answers = iter([[Document(page_content="Open the cover.", metadata={"source": "o.md", "section": "S", "distance": borderline})]])
+    app = build_graph(FakeLLM("1"), lambda q, d: next(answers), ErrorCodeDB(), max_retries=2)
+    assert ask(app, "paper jam")["answer"] != prompts.FALLBACK  # the same distance is fine on a first try
 
 
 def test_no_docs_retrieved_triggers_rewrite_then_fallback():

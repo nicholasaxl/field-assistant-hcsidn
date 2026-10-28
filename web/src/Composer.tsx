@@ -13,9 +13,24 @@ type Props = {
   devices: string[];
   device: string;
   onDevice: (device: string) => void;
+  followups: string[];
+  onFollowup: (text: string) => void;
+  hasConversation: boolean;
 };
 
-export function Composer({ value, onChange, onSubmit, onStop, running, devices, device, onDevice }: Props) {
+export function Composer({
+  value,
+  onChange,
+  onSubmit,
+  onStop,
+  running,
+  devices,
+  device,
+  onDevice,
+  followups,
+  onFollowup,
+  hasConversation,
+}: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const compact = useMedia("(max-width: 520px)");
 
@@ -34,6 +49,23 @@ export function Composer({ value, onChange, onSubmit, onStop, running, devices, 
 
   return (
     <div className="dock">
+      <AnimatePresence initial={false}>
+        {followups.length > 0 && (
+          <motion.div
+            className="followups"
+            initial={{ opacity: 0, y: 8, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto" }}
+            exit={{ opacity: 0, y: 8, height: 0 }}
+            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+          >
+            {followups.map((text) => (
+              <button key={text} className="reason-chip" onClick={() => onFollowup(text)}>
+                {text}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
       <form
         className="composer"
         onSubmit={(e) => {
@@ -50,7 +82,15 @@ export function Composer({ value, onChange, onSubmit, onStop, running, devices, 
           className="composer-input"
           rows={1}
           value={value}
-          placeholder={compact ? "Describe the fault or error code" : "Describe the fault, or paste an error code like P-1002"}
+          placeholder={
+            compact
+              ? hasConversation
+                ? "Ask a follow-up or a new problem"
+                : "Describe the fault or error code"
+              : hasConversation
+                ? "Ask a follow-up, or describe a new problem"
+                : "Describe the fault, or paste an error code like P-1002"
+          }
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {

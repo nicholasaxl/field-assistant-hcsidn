@@ -16,6 +16,8 @@ from langgraph.graph import END, START, StateGraph
 import config
 from src import prompts
 from src.citations import analyze, answer_strength, attribute
+from src.conversation import contextualize as contextualize_question
+from src.conversation import is_vague, tied_devices
 from src.devices import infer_device
 from src.error_lookup import ErrorCodeDB
 from src.fastpath import pick_fast_steps
@@ -38,6 +40,12 @@ class AgentState(TypedDict, total=False):
     fast: bool  # the steps are the manual's own wording, shown without a model call
     inferred_device: str | None  # device worked out from the question when none was chosen
     infer_device: bool  # False when the engineer asked to search every device
+    history: list  # the last few turns, for follow-up questions
+    followup: bool  # this question continues the previous one
+    failure_followup: bool  # ...and says the previous procedure didn't work
+    exclude: list  # passage labels already shown for a failed procedure
+    clarify: dict  # a question back to the engineer instead of an answer
+    best_distance: float  # closest passage when nothing was close enough
     retries: int
     trace: list
 
@@ -70,6 +78,8 @@ def _build_sources(code_records: list, docs: list) -> list[dict]:
             "kind": "document",
             "distance": d.metadata.get("distance"),
             "device": d.metadata.get("device_model"),
+            "file": d.metadata.get("source"),
+            "page": d.metadata.get("page"),
         }
         for d in docs
     ]
@@ -86,10 +96,29 @@ def build_graph(
 ):
     """Compile the agent. `llm` needs .invoke(str); `retrieve_fn(query, device_model)` returns Documents."""
 
+    def contextualize(state: AgentState) -> dict:
+        """Turn a follow-up ("that didn't work") into a standalone question using the last few turns."""
+        result = contextualize_question(state["question"], state.get("history") or [])
+        if result is None:
+            return {"followup": False, "failure_followup": False, "exclude": [], "trace": []}
+        update = {
+            "question": result["question"],
+            "followup": True,
+            "failure_followup": result["failure"],
+            "exclude": result["exclude"],
+            "trace": [f"contextualize: follow-up ({'that did not work' if result['failure'] else 'question'})"],
+        }
+        if (state.get("device_model") or config.ALL_DEVICES) == config.ALL_DEVICES and result["device"] not in (
+            None,
+            config.ALL_DEVICES,
+        ):
+            update["device_model"] = result["device"]
+        return update
+
     def classify(state: AgentState) -> dict:
         question = state["question"].strip()
         if not question:
-            return {"intent": "out_of_scope", "trace": ["classify: empty question"]}
+            return {"intent": "out_of_scope", "trace": state.get("trace", []) + ["classify: empty question"]}
         device = state.get("device_model") or config.ALL_DEVICES
         records = code_db.find(question, device)
         intent = "error_code" if records else "troubleshooting"
@@ -104,7 +133,7 @@ def build_graph(
             "retries": 0,
             "device_model": inferred or device,
             "inferred_device": inferred,
-            "trace": [note + (f", device inferred: {inferred}" if inferred else "")],
+            "trace": state.get("trace", []) + [note + (f", device inferred: {inferred}" if inferred else "")],
         }
 
     def lookup_code(state: AgentState) -> dict:
@@ -113,6 +142,9 @@ def build_graph(
 
     def retrieve(state: AgentState) -> dict:
         docs = retrieve_fn(state["query"], state.get("device_model"))
+        shown = set(state.get("exclude") or [])
+        if shown:  # a procedure that didn't work is not offered a second time
+            docs = [d for d in docs if _doc_label(d) not in shown]
         return {"docs": docs, "trace": state["trace"] + [f"retrieve: {len(docs)} chunk(s)"]}
 
     def grade(state: AgentState) -> dict:
@@ -124,15 +156,25 @@ def build_graph(
         if not docs:
             return {"trace": state["trace"] + ["grade: nothing retrieved"]}
         distances = [d.metadata["distance"] for d in docs if "distance" in d.metadata]
-        if distances and min(distances) > config.RELEVANCE_MAX_DISTANCE:
+        gate = config.RELEVANCE_MAX_DISTANCE - (config.REWRITE_TIGHTEN if state.get("retries", 0) > 0 else 0.0)
+        if distances and min(distances) > gate:
             # Scope is decided by retrieval distance: a small model said NONE even when the best
-            # chunk was exactly right (e.g. a question that doesn't name the device).
-            note = f"grade: best distance {min(distances):.2f} > {config.RELEVANCE_MAX_DISTANCE}, out of scope"
-            return {"docs": [], "trace": state["trace"] + [note]}
+            # chunk was exactly right (e.g. a question that doesn't name the device). After a rewrite
+            # the bar is higher, so an unrelated question can't be rewritten into a false match.
+            note = f"grade: best distance {min(distances):.2f} > {gate:.2f}, out of scope"
+            return {"docs": [], "best_distance": min(distances), "trace": state["trace"] + [note]}
         if distances and (len(docs) == 1 or min(distances) <= config.STRONG_DISTANCE):
             # A strong top match needs no model opinion: keep it and anything about as close, skip the call.
             best = min(distances)
-            kept = [d for d in docs if d.metadata.get("distance", best) <= best + 0.15][:3]
+            best_source = next(d.metadata.get("source") for d in docs if d.metadata.get("distance") == best)
+            # Keep everything about as close, plus sibling sections of the same document: the answer to a
+            # symptom is often in the "Fix" section next to it, which is a little further away.
+            kept = [
+                d
+                for d in docs
+                if d.metadata.get("distance", best) <= best + 0.15
+                or (d.metadata.get("source") == best_source and d.metadata.get("distance", best) <= best + 0.30)
+            ][:4]
             return {"docs": kept, "trace": state["trace"] + [f"grade: skipped (strong match), kept {len(kept)}/{len(docs)}"]}
         passages = "\n\n".join(f"[{i}] {body_text(d)[:600]}" for i, d in enumerate(docs, start=1))
         reply = _text(llm.invoke(prompts.GRADE.format(question=state["question"], passages=passages)))
@@ -150,7 +192,11 @@ def build_graph(
     def route_after_grade(state: AgentState) -> str:
         if state["docs"] or state["code_records"]:
             return "generate"
-        return "rewrite" if state["retries"] < max_retries else "fallback"
+        if state["retries"] >= max_retries:
+            return "fallback"
+        if state.get("best_distance", 0.0) > config.RELEVANCE_MAX_DISTANCE + config.REWRITE_MAX_OVERSHOOT:
+            return "fallback"  # nowhere near any document: rewording won't help
+        return "rewrite"
 
     def rewrite(state: AgentState) -> dict:
         new_query = _text(llm.invoke(prompts.REWRITE.format(question=state["question"]))).strip()
@@ -161,7 +207,37 @@ def build_graph(
             "trace": state["trace"] + [f"rewrite #{retries}: {new_query[:80]}"],
         }
 
+    def clarification(state: AgentState) -> dict | None:
+        """Ask rather than guess: only for a vague question or a near-tie between devices, never on a follow-up."""
+        if state.get("intent") != "troubleshooting" or state.get("followup") or not state.get("infer_device", True):
+            return None
+        if (state.get("device_model") or config.ALL_DEVICES) != config.ALL_DEVICES:
+            return None
+        if is_vague(state["question"]):
+            options = known_devices_fn() if known_devices_fn else []
+            return {
+                "kind": "detail",
+                "prompt": "Tell me a bit more: which device is it, and what does it show or do?",
+                "options": options,
+            }
+        tied = tied_devices(state.get("docs", []))
+        if tied:
+            return {"kind": "device", "prompt": "Which device are you working on?", "options": tied}
+        return None
+
+    def clarify(state: AgentState) -> dict:
+        return {
+            "clarify": clarification(state),
+            "answer": "",
+            "sources": [],
+            "blocks": [],
+            "alerts": [],
+            "trace": state["trace"] + ["clarify"],
+        }
+
     def route_after_retrieve(state: AgentState) -> str:
+        if clarification(state):
+            return "clarify"
         if fast_path and state.get("intent") in ("error_code", "troubleshooting"):
             doc, _steps = pick_fast_steps(state["question"], state["docs"], state["code_records"], config.FAST_PATH_DISTANCE)
             if doc is not None:
@@ -212,13 +288,15 @@ def build_graph(
 
     def fallback(state: AgentState) -> dict:
         return {
-            "answer": prompts.FALLBACK,
+            "answer": prompts.EXHAUSTED if state.get("failure_followup") else prompts.FALLBACK,
             "sources": [],
             "trace": state.get("trace", []) + ["fallback"],
         }
 
     graph = StateGraph(AgentState)
     for name, fn in [
+        ("contextualize", contextualize),
+        ("clarify", clarify),
         ("classify", classify),
         ("lookup_code", lookup_code),
         ("retrieve", retrieve),
@@ -232,14 +310,18 @@ def build_graph(
     ]:
         graph.add_node(name, fn)
 
-    graph.add_edge(START, "classify")
+    graph.add_edge(START, "contextualize")
+    graph.add_edge("contextualize", "classify")
     graph.add_conditional_edges(
         "classify",
         lambda s: {"error_code": "lookup_code", "troubleshooting": "retrieve"}.get(s["intent"], "fallback"),
         {"lookup_code": "lookup_code", "retrieve": "retrieve", "fallback": "fallback"},
     )
     graph.add_edge("lookup_code", "retrieve")
-    graph.add_conditional_edges("retrieve", route_after_retrieve, {"fast_answer": "fast_answer", "grade": "grade"})
+    graph.add_conditional_edges(
+        "retrieve", route_after_retrieve, {"fast_answer": "fast_answer", "grade": "grade", "clarify": "clarify"}
+    )
+    graph.add_edge("clarify", END)
     graph.add_edge("fast_answer", "format_citations")
     graph.add_conditional_edges(
         "grade", route_after_grade, {"generate": "generate", "rewrite": "rewrite", "fallback": "fallback"}

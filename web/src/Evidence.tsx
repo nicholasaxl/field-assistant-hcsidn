@@ -48,11 +48,23 @@ function SourceItem({ source, n, active, innerRef }: {
       <p className="source-text" data-clamped={long && !expanded}>
         {source.text}
       </p>
-      {long && (
-        <button className="link-btn" onClick={() => setExpanded((e) => !e)}>
-          {expanded ? "Show less" : "Show more"}
-        </button>
-      )}
+      <div className="source-links">
+        {long && (
+          <button className="link-btn" onClick={() => setExpanded((e) => !e)}>
+            {expanded ? "Show less" : "Show more"}
+          </button>
+        )}
+        {source.kind === "document" && source.file && (
+          <a
+            className="link-btn"
+            href={`/api/files/${encodeURIComponent(source.file)}${source.page ? `#page=${source.page}` : ""}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {/\.pdf$/i.test(source.file) ? `Open the document${source.page ? ` at page ${source.page}` : ""}` : "Download the document"}
+          </a>
+        )}
+      </div>
     </li>
   );
 }

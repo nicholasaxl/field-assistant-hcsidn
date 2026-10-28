@@ -1,4 +1,14 @@
-import type { DocInfo, Health, InsightsData, Outcome, Reason, Scorecard, StreamEvent, UploadResult } from "./types";
+import type {
+  DocInfo,
+  Health,
+  HistoryItem,
+  InsightsData,
+  Outcome,
+  Reason,
+  Scorecard,
+  StreamEvent,
+  UploadResult,
+} from "./types";
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -19,13 +29,14 @@ export async function askStream(
   question: string,
   device: string,
   infer: boolean,
+  history: HistoryItem[],
   onEvent: (event: StreamEvent) => void,
   signal: AbortSignal,
 ): Promise<void> {
   const res = await fetch("/api/ask", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, device_model: device, infer_device: infer }),
+    body: JSON.stringify({ question, device_model: device, infer_device: infer, history }),
     signal,
   });
   if (!res.ok || !res.body) throw new Error(`Can't reach the assistant (${res.status}). Is the server running?`);

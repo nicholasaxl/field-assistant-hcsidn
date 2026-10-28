@@ -34,6 +34,10 @@ Expect roughly 10-25 seconds per answer on a CPU-only laptop.
 - **Device switch.** Narrow answers to one device model; chunks tagged for all devices always stay in scope.
 - **Did this fix it?** Every answer ends with Fixed it / Didn't fix it. "Didn't fix it" asks what happened and produces a plain-text **handoff summary** (problem, device, error codes, the procedure suggested, which step failed, sources, the engineer's note) to copy to the next level of support. Answers with nothing found offer "Escalate with a summary".
 - **Safety alerts.** Rules in `data/policies.json` (not the model) raise an alert for Critical error codes and risky topics: possible tampering, encryption keys, cash discrepancies, two-person cash work. For Critical alerts the procedure stays hidden behind "Show the documented procedure". Edit the file to change wording, keywords and the escalation contact.
+- **Follow-ups.** After an answer, "That didn't work" or a short follow-up ("what about the kiosk?") is understood in context: the last three turns (question, device, sources shown) are sent with the question, and plain rules (`src/conversation.py`) rebuild a standalone search. When a procedure didn't work, the passages already shown are not offered again; if nothing else is documented the answer says so and offers a handoff summary. Memory is deliberately shallow because a small model with a 4,096-token window can't hold a long dialogue.
+- **Clarifying questions.** Only when it would otherwise guess: a near-tie between two devices' passages ("Which device are you working on?" with one-tap choices) or a question too short to search on. Never on a follow-up, and never once a device is chosen.
+- **Guided mode.** "Guide me step by step" walks the procedure one step at a time with Done / Didn't work. Results are saved, so Insights shows which steps fail most, and a failed step leads straight to a handoff summary. No model call is involved.
+- **Open the original.** A source can open the original document (PDFs at the right page) from the Sources panel.
 - **Insights.** Questions per day, what people ask about, fix rate (with how many answers actually got a response), an *estimated* engineer-time saving (answers fixed × minutes you set, never presented as a measurement), gaps in the library (questions with no answer or marked not fixed, grouped), per-document fix rate, the steps that fail most, and the last accuracy check. Data lives locally in `data/feedback.db`; Export CSV and Clear data are on the page. "Preview with sample data" fills the page with clearly labelled **invented** numbers for demos; it replaces the view until removed and never mixes with real data.
 - Light and dark themes, keyboard focus states, reduced-motion support, responsive down to phone width.
 
@@ -63,6 +67,7 @@ question -> classify -> (error code?) exact lookup in error_codes.csv
 - **Skipped relevance check**: on a strong match the small model's relevance call is replaced by a distance rule.
 - **Saved answers**: an in-memory cache returns a repeated question instantly. It is keyed on the question, device, library version, safety rules and settings, so adding or removing a document invalidates it.
 - **Stop really stops**: closing the stream stops the agent before its next stage starts.
+- **Stricter retries**: if nothing is close enough the question is reworded and searched again, but a reworded query must match more tightly than the original (`REWRITE_TIGHTEN`), and a question far from every document skips the retry (`REWRITE_MAX_OVERSHOOT`). This stops the model rewording an unrelated question into a false match.
 - **Hybrid search** (`src/retriever.py`): vector search is fused with BM25 keyword search (reciprocal rank fusion) so part numbers and codes in prose match exactly. The best vector hit is always kept, because its distance decides whether a question is answerable; keyword-only hits carry no distance and can never make an unrelated question look answerable. Turn it off with `HYBRID_SEARCH=0`.
 - **Passage headers**: each passage is embedded with "device | document | section" (the original text is kept for display), so a section titled with an error code is found by that code. Documents indexed in an older format are re-indexed from their saved files at startup (`python -m src.ingest --reindex` does the same by hand). Tables up to 1,500 characters stay in one piece.
 - **Glossary** (`data/glossary.json`): synonym groups such as note jam / cash jam / bill jam widen the search only; edit the file to match your own vocabulary.
@@ -75,11 +80,14 @@ question -> classify -> (error code?) exact lookup in error_codes.csv
 ## Project layout
 
 ```
-src/            agent, loader, ingestion, retrieval, citations, FastAPI server (api.py)
+src/            agent (graph.py), loader, ingestion, retrieval, citations, safety rules (policy.py),
+                feedback store, conversation rules, fast path, evaluator, FastAPI server (api.py)
 web/            React + Vite + TypeScript frontend (motion for animation, fonts bundled locally)
-data/           sample manuals, error-code table, a demo upload
-tests/          Python tests (fake LLM and embeddings, no Ollama needed)
+data/           sample manuals, error-code table, policies.json, glossary.json, demo uploads
+docs/           scorecard.md / scorecard.json (written by src.evaluate --answers), PITCH.md
+tests/          Python tests (fake LLM and embeddings, no Ollama needed) and the evaluation questions
 start.ps1       build the UI if needed and run the server
+.github/        CI: backend tests and a frontend type-check/build on every push
 ```
 
 ## Document loader

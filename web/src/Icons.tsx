@@ -39,7 +39,13 @@ export const InsightsIcon = (p: IconProps) => (
     <path d="M5 20V11M12 20V4M19 20v-6" />
   </Svg>
 );
-export const ThumbUp = (p: IconProps) => (
+export const GuideIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M9 6h11M9 12h11M9 18h11" />
+    <path d="m3.5 6 1 1 2-2M3.5 12l1 1 2-2M3.5 18l1 1 2-2" />
+  </Svg>
+);
+export const ThumbUp =(p: IconProps) => (
   <Svg {...p}>
     <path d="M7 11v9H4v-9h3ZM7 11l3.5-7a2 2 0 0 1 2 2.2L12 9h5.6a2 2 0 0 1 2 2.4l-1.3 6.6a2 2 0 0 1-2 1.6H7" />
   </Svg>

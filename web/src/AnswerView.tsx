@@ -2,7 +2,8 @@ import { motion, useReducedMotion } from "motion/react";
 import { useState } from "react";
 import { Alerts } from "./Alerts";
 import { FeedbackBar } from "./FeedbackBar";
-import { Alert, Copy, Check, Info, LibraryIcon, SourcesIcon } from "./Icons";
+import { GuidedSteps } from "./GuidedSteps";
+import { Alert, Copy, Check, GuideIcon, Info, LibraryIcon, SourcesIcon } from "./Icons";
 import type { AnswerData, Block } from "./types";
 
 type Props = {
@@ -61,6 +62,7 @@ export function AnswerView({ answer, activeSource, onCite, onOpenSources, onOpen
   const alerts = answer.alerts ?? [];
   // A critical alert comes first; the procedure stays one deliberate click away.
   const [showSteps, setShowSteps] = useState(!alerts.some((a) => a.level === "critical"));
+  const [guided, setGuided] = useState(false);
 
   if (answer.fallback) {
     return (
@@ -69,12 +71,27 @@ export function AnswerView({ answer, activeSource, onCite, onOpenSources, onOpen
         <div className="notice" role="status">
           <Info />
           <div>
-            <p className="notice-title">Nothing in the library matches</p>
-            <p>Name the device or error code, or add the manual that covers it. Otherwise escalate to level 2 support.</p>
-            <button className="pill-btn" onClick={onOpenLibrary}>
-              <LibraryIcon />
-              Open library
-            </button>
+            {answer.exhausted ? (
+              <>
+                <p className="notice-title">No more documented steps</p>
+                <p>
+                  Everything the documents suggest for this has been tried. Hand it over with a summary so the next
+                  person doesn't start from zero.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="notice-title">Nothing in the library matches</p>
+                <p>
+                  Name the device or error code, or add the manual that covers it. Otherwise escalate to level 2
+                  support.
+                </p>
+                <button className="pill-btn" onClick={onOpenLibrary}>
+                  <LibraryIcon />
+                  Open library
+                </button>
+              </>
+            )}
           </div>
         </div>
         {answer.interaction_id && <FeedbackBar interactionId={answer.interaction_id} noAnswer />}
@@ -125,6 +142,14 @@ export function AnswerView({ answer, activeSource, onCite, onOpenSources, onOpen
             Show the documented procedure
           </button>
         </div>
+      ) : guided ? (
+        <GuidedSteps
+          steps={allSteps}
+          interactionId={answer.interaction_id}
+          activeSource={activeSource}
+          onCite={onCite}
+          onExit={() => setGuided(false)}
+        />
       ) : (
         groups.map((g, gi) =>
         g.kind === "text" ? (
@@ -178,6 +203,12 @@ export function AnswerView({ answer, activeSource, onCite, onOpenSources, onOpen
       )}
 
       <div className="answer-actions">
+        {allSteps.length >= 2 && showSteps && !guided && (
+          <button className="pill-btn" onClick={() => setGuided(true)}>
+            <GuideIcon />
+            Guide me step by step
+          </button>
+        )}
         {allSteps.length > 0 && (
           <button className="pill-btn" onClick={copySteps}>
             {copied ? <Check /> : <Copy />}
@@ -194,7 +225,7 @@ export function AnswerView({ answer, activeSource, onCite, onOpenSources, onOpen
         <span className="elapsed">{answer.elapsed} s</span>
       </div>
 
-      {answer.interaction_id && <FeedbackBar interactionId={answer.interaction_id} />}
+      {answer.interaction_id && !guided && <FeedbackBar interactionId={answer.interaction_id} />}
     </div>
   );
 }
