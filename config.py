@@ -20,6 +20,10 @@ CHUNK_SIZE = 800
 CHUNK_OVERLAP = 100
 TOP_K = 4
 MAX_RETRIES = 2  # query rewrites before giving up
+# If even the best chunk is farther than this (Chroma L2 distance), the question is treated as
+# out of scope. Tuned for nomic-embed-text on the sample docs (in-scope 0.4-0.8, unrelated 0.95+);
+# re-tune with `python -m src.evaluate` if you change the embedding model.
+RELEVANCE_MAX_DISTANCE = float(os.getenv("RELEVANCE_MAX_DISTANCE", "0.88"))
 
 # Uploads
 MAX_UPLOAD_MB = 50

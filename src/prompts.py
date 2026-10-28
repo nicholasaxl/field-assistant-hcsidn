@@ -8,8 +8,8 @@ Passages:
 {passages}
 
 List the passages that are related to the question: same device, component, symptom, or procedure. Be lenient: include a passage if it is even partly useful.
-Only exclude passages that are about something completely different. If the question is not about POS terminals, ATMs, kiosks or their networking, reply NONE.
-Reply with only the passage numbers separated by commas (for example: 1,3), or NONE."""
+The question may not name a device; that is fine. Only exclude passages that are about something completely different.
+Reply with only the passage numbers separated by commas (for example: 1,3)."""
 
 REWRITE = """Rewrite this support question as a short keyword search query for a technical manual.
 Keep device names and error codes. Reply with only the query.

@@ -80,16 +80,21 @@ def build_graph(
             return {"trace": state["trace"] + [f"grade: skipped (exact error-code match), kept {len(docs)}"]}
         if not docs:
             return {"trace": state["trace"] + ["grade: nothing retrieved"]}
+        distances = [d.metadata["distance"] for d in docs if "distance" in d.metadata]
+        if distances and min(distances) > config.RELEVANCE_MAX_DISTANCE:
+            # Scope is decided by retrieval distance: a small model said NONE even when the best
+            # chunk was exactly right (e.g. a question that doesn't name the device).
+            note = f"grade: best distance {min(distances):.2f} > {config.RELEVANCE_MAX_DISTANCE}, out of scope"
+            return {"docs": [], "trace": state["trace"] + [note]}
         passages = "\n\n".join(f"[{i}] {d.page_content[:600]}" for i, d in enumerate(docs, start=1))
         reply = _text(llm.invoke(prompts.GRADE.format(question=state["question"], passages=passages)))
         numbers = {int(n) for n in re.findall(r"\d+", reply)}
         if numbers:
-            # Retrieval already ranks the best match first and a small model often vetoes it wrongly,
-            # so the grader may only prune lower-ranked chunks. Rejecting everything needs an explicit NONE.
+            # The grader may only prune lower-ranked chunks; retrieval already ranks the best match first.
             numbers.add(1)
             kept = [d for i, d in enumerate(docs, start=1) if i in numbers]
         elif "none" in reply.lower():
-            kept = []
+            kept = docs[:1]  # distance already says something relevant exists, so keep the best chunk
         else:  # unparsable reply from a small model: keep everything, the answer prompt is still strict
             kept = docs
         return {"docs": kept, "trace": state["trace"] + [f"grade: kept {len(kept)}/{len(docs)}"]}

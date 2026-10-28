@@ -51,6 +51,15 @@ def test_device_filter_keeps_all_tagged_chunks(store, tmp_path):
     assert {d.metadata["source"] for d in retrieve("anything", store, None, k=10)} == {"pos.md", "atm.md", "net.md"}
 
 
+def test_retrieved_chunks_carry_distance_best_first(store, tmp_path):
+    _write(tmp_path / "a.md", "printer paper roll")
+    _write(tmp_path / "b.md", "cash cassette")
+    ingest_directory(tmp_path, store)
+    docs = retrieve("printer paper roll", store, k=2)
+    distances = [d.metadata["distance"] for d in docs]
+    assert distances == sorted(distances) and distances[0] < distances[1]
+
+
 def test_bad_file_does_not_stop_batch(store, tmp_path):
     _write(tmp_path / "good.md", "ok")
     (tmp_path / "blank.md").write_text("  ", encoding="utf-8")

@@ -18,7 +18,8 @@ question -> classify -> (error code?) exact lookup in error_codes.csv
 - Routing is plain Python (`src/graph.py`); the LLM only grades, rewrites queries and writes the answer. Small local models are unreliable at tool calling, so nothing depends on it.
 - Error codes (e.g. `P-1002`) are looked up exactly in `data/error_codes.csv`, not by semantic search.
 - Citations are computed, not trusted: small models invent source numbers, so `src/citations.py` strips the model's own `[n]` markers and attaches the sources whose text actually contains each step. A step that matches no source is left uncited and flagged "verify before acting".
-- The relevance grader skips exact error-code matches, and it can prune lower-ranked chunks but cannot veto the top-ranked one (only an explicit NONE rejects everything, which triggers the "not found" fallback).
+- "Is this question answerable from the documents?" is decided by retrieval distance (`RELEVANCE_MAX_DISTANCE` in `config.py`), not by the small model, which wrongly said NONE for questions that didn't name a device. If the best chunk is too far away the agent rewrites the query, then falls back to "not found, escalate".
+- The relevance grader only prunes lower-ranked chunks; it skips exact error-code matches and can never veto the top-ranked chunk. If you change the embedding model, re-tune `RELEVANCE_MAX_DISTANCE`.
 - Device-model filter: choosing a model searches chunks tagged for it plus chunks tagged `all`.
 
 ## Document loader

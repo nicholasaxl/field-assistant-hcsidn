@@ -78,9 +78,36 @@ def test_steps_are_cited_by_content_and_unsupported_steps_are_flagged():
     assert state["trace"][-1] == "citations: 1 step(s) matched, 1 unmatched"
 
 
+NEAR = Document(
+    page_content="Open the cover and remove the paper.",
+    metadata={"source": "runbook.md", "section": "Jam", "distance": config.RELEVANCE_MAX_DISTANCE - 0.1},
+)
+FAR = Document(
+    page_content="Unrelated text.",
+    metadata={"source": "other.md", "section": "X", "distance": config.RELEVANCE_MAX_DISTANCE + 0.1},
+)
+
+
+def test_grader_none_cannot_reject_a_close_match():
+    llm = FakeLLM("NONE")  # the real 3B model said this for "How do I clear a note jam?"
+    app, _ = make_app(llm, [NEAR, FAR])
+    state = ask(app, "How do I clear a note jam?")
+    assert [s["label"] for s in state["sources"]] == ["runbook.md, Jam"]
+    assert state["answer"] != prompts.FALLBACK
+
+
+def test_far_retrieval_is_out_of_scope_without_calling_the_grader():
+    llm = FakeLLM("1")
+    app, seen = make_app(llm, [FAR], max_retries=1)
+    state = ask(app, "best sourdough recipe?")
+    assert state["answer"] == prompts.FALLBACK and len(seen) == 2
+    assert not any(c.startswith("You are checking") for c in llm.calls)
+    assert any("out of scope" in t for t in state["trace"])
+
+
 def test_weak_retrieval_rewrites_then_falls_back():
     llm = FakeLLM("NONE")
-    app, seen = make_app(llm, [DOC], max_retries=2)
+    app, seen = make_app(llm, [FAR], max_retries=2)
     state = ask(app, "how do I bake bread")
     assert state["answer"] == prompts.FALLBACK
     assert state["retries"] == 2
