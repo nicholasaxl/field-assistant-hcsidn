@@ -10,6 +10,8 @@ def _never_touch_the_real_feedback_db(tmp_path, monkeypatch):
 
     monkeypatch.setattr(config, "FEEDBACK_DB", tmp_path / "guard-feedback.db")
     api.get_feedback_store.cache_clear()
+    api.answer_cache.clear()  # a saved answer from one test must never answer another
     yield
+    api.answer_cache.clear()
     # A test may have replaced the function with a plain lambda; only the cached original has cache_clear.
     getattr(api.get_feedback_store, "cache_clear", lambda: None)()

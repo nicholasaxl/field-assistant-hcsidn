@@ -100,12 +100,24 @@ export function AnswerView({ answer, activeSource, onCite, onOpenSources, onOpen
   return (
     <div className="answer">
       <Alerts alerts={alerts} />
-      {answer.strength && (
-        <p className="strength" data-level={answer.strength.level} title={answer.strength.reason}>
-          <span className="strength-dot" />
-          {answer.strength.label}
-        </p>
-      )}
+      <div className="answer-tags">
+        {answer.strength && (
+          <p className="strength" data-level={answer.strength.level} title={answer.strength.reason}>
+            <span className="strength-dot" />
+            {answer.strength.label}
+          </p>
+        )}
+        {answer.fast && (
+          <p className="tag" title="These steps are copied from the manual. No model wrote them.">
+            Copied from the manual
+          </p>
+        )}
+        {answer.cached && (
+          <p className="tag" title="You asked this before and the documents haven't changed.">
+            Saved answer
+          </p>
+        )}
+      </div>
       {!showSteps ? (
         <div className="gate">
           <p>The documented procedure is hidden until you've read the alert above.</p>

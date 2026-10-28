@@ -137,6 +137,59 @@ def test_grader_cannot_veto_the_top_ranked_chunk():
     assert "grade: kept 2/3" in state["trace"]
 
 
+STEPS = Document(
+    page_content="1. Open the cover and remove the paper.\n2. Reload the roll.\n3. Run a test print.",
+    metadata={"source": "runbook.md", "section": "Paper jam", "distance": 0.4, "device_model": "HX-POS-200"},
+)
+
+
+def test_fast_path_shows_the_manuals_own_steps_with_no_model_call():
+    llm = FakeLLM("NONE")
+    app, _ = make_app(llm, [STEPS])
+    state = ask(app, "printer paper jam")
+    assert llm.calls == []  # neither the relevance check nor the writing step ran
+    assert state["fast"] is True
+    assert [b["text"] for b in state["blocks"] if b["kind"] == "step"][0] == "Open the cover and remove the paper."
+    assert all(b["supported"] for b in state["blocks"] if b["kind"] == "step")
+    assert state["strength"]["level"] == "strong"
+    assert any(t.startswith("fast_answer: 3 step(s)") for t in state["trace"])
+
+
+def test_fast_path_can_be_switched_off():
+    llm = FakeLLM("1")
+    app = build_graph(llm, lambda q, d: [STEPS], ErrorCodeDB(), fast_path=False)
+    state = ask(app, "printer paper jam")
+    assert not state.get("fast") and len(llm.calls) >= 1
+
+
+def test_a_strong_match_skips_the_relevance_model_but_still_writes_the_answer():
+    prose = Document(page_content="Blank receipts mean the paper is upside down.", metadata={"source": "r.md", "distance": 0.5})
+    llm = FakeLLM("NONE")
+    app, _ = make_app(llm, [prose])
+    state = ask(app, "receipts blank")
+    assert not any(c.startswith("You are checking") for c in llm.calls)
+    assert any(c.startswith("You are a support assistant") for c in llm.calls)
+    assert any("grade: skipped (strong match)" in t for t in state["trace"])
+
+
+def test_device_is_inferred_and_used_for_the_search():
+    seen = []
+
+    def retrieve_fn(query, device):
+        seen.append(device)
+        return [STEPS]
+
+    app = build_graph(FakeLLM("1"), retrieve_fn, ErrorCodeDB(), known_devices_fn=lambda: ["HX-ATM-500", "HX-POS-200"])
+    state = ask(app, "the ATM is jamming")
+    assert state["inferred_device"] == "HX-ATM-500" and seen == ["HX-ATM-500"]
+    seen.clear()
+    ask(app, "the ATM is jamming", "HX-POS-200")  # an explicit choice is never overridden
+    assert seen == ["HX-POS-200"]
+    seen.clear()
+    state = app.invoke({"question": "the ATM is jamming", "device_model": "all", "infer_device": False})
+    assert seen == ["all"] and not state["inferred_device"]  # "search all devices" turns the guess off
+
+
 def test_critical_error_code_raises_an_alert_from_the_real_policy_file():
     app, _ = make_app(FakeLLM("1"), [NEAR])
     state = ask(app, "ATM shows A-2002", "HX-ATM-500")

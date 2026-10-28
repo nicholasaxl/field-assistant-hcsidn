@@ -7,8 +7,9 @@ import type { Stage } from "./types";
 const NEXT_LABEL: Record<string, string> = {
   classify: "Searching the manuals",
   lookup_code: "Searching the manuals",
-  retrieve: "Checking relevance",
+  retrieve: "Checking the passages",
   rewrite: "Searching the manuals",
+  fast_answer: "Verifying sources",
   generate: "Verifying sources",
   format_citations: "Safety check",
 };

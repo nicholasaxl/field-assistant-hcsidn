@@ -44,6 +44,13 @@ def fake_state(text, sources=("a.md, Jam",), steps=1, supported=True, alerts=(),
     }
 
 
+def test_keyword_only_matches_without_a_distance_do_not_break_scoring():
+    keyword_only = [Document(page_content="x", metadata={"source": "a.md"})]  # found by BM25 alone
+    results = {"jam": docs(("a.md", 0.5)), "blank": docs(("b.md", 0.5)), "bread": keyword_only, "football": keyword_only}
+    score = ev.score_retrieval(CASES, lambda q, d: results[q], ErrorCodeDB())
+    assert score["refusal_rate"] == 1.0  # no vector distance means no evidence the question is answerable
+
+
 def test_score_answers_pass_traced_refusal_alert_and_code():
     def ask_fn(question, device):
         return {

@@ -121,6 +121,59 @@ def ask_once(client, question="printer jam"):
     return events(client.post("/api/ask", json={"question": question, "device_model": "all"}))[-1]
 
 
+def test_a_repeated_question_is_answered_from_the_cache_until_the_documents_change(client, monkeypatch):
+    first = events(client.post("/api/ask", json={"question": "printer jam"}))  # nothing indexed yet: fallback
+    upload(client)  # indexing bumps the library version, so the earlier fallback is no longer reused
+    second = events(client.post("/api/ask", json={"question": "printer jam"}))
+    assert second[-1]["cached"] is False and second[-1]["fallback"] is False
+
+    third = events(client.post("/api/ask", json={"question": "  Printer   JAM "}))  # same question, different spacing
+    assert [e["node"] for e in third if e["type"] == "stage"] == ["cache"]
+    assert third[-1]["cached"] is True and third[-1]["elapsed"] == 0.0
+    assert third[-1]["blocks"] == second[-1]["blocks"]
+    assert third[-1]["interaction_id"] != second[-1]["interaction_id"]  # each ask is its own record for feedback
+    assert client.feedback.get_interaction(third[-1]["interaction_id"])["cached"] == 1
+
+    client.delete("/api/documents/runbook.md")
+    assert events(client.post("/api/ask", json={"question": "printer jam"}))[-1]["cached"] is False
+    assert first[-1]["fallback"] is True
+
+
+def test_answer_cache_is_a_bounded_lru():
+    cache = api_module.AnswerCache(2)
+    cache.put("a", {"v": 1})
+    cache.put("b", {"v": 2})
+    cache.get("a")  # a is now the most recently used
+    cache.put("c", {"v": 3})
+    assert cache.get("b") is None and cache.get("a") == {"v": 1} and cache.get("c") == {"v": 3}
+    api_module.AnswerCache(0).put("x", {"v": 1})  # size 0 never stores
+
+
+def test_stopping_the_stream_stops_the_agent_before_its_next_stage():
+    import asyncio
+
+    started = []
+
+    def slow_events():
+        for name in ["one", "two", "three", "four"]:
+            started.append(name)
+            yield name
+
+    class Request:
+        def __init__(self):
+            self.calls = 0
+
+        async def is_disconnected(self):
+            self.calls += 1
+            return self.calls > 2  # the client leaves after receiving two events
+
+    async def consume():
+        return [item async for item in api_module.event_stream(Request(), slow_events())]
+
+    assert asyncio.run(consume()) == ["one", "two"]
+    assert started == ["one", "two"]  # stages three and four never began
+
+
 def test_feedback_flow_returns_a_handoff_only_when_it_did_not_fix(client):
     answer = ask_once(client)
     iid = answer["interaction_id"]

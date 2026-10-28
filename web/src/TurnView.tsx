@@ -10,18 +10,29 @@ type Props = {
   onCite: (n: number) => void;
   onOpenSources: () => void;
   onOpenLibrary: () => void;
+  onSearchAll: () => void;
+  canSearchAll: boolean;
 };
 
-export function TurnView({ turn, activeSource, onCite, onOpenSources, onOpenLibrary }: Props) {
+export function TurnView({ turn, activeSource, onCite, onOpenSources, onOpenLibrary, onSearchAll, canSearchAll }: Props) {
+  const inferred = turn.answer?.device_inferred ?? null;
   return (
     <article className="turn" aria-busy={turn.status === "running"}>
       <div className="turn-q">
         <p>{turn.question}</p>
         <span className="chip">
-          <DeviceIcon kind={deviceKind(turn.device)} />
-          {deviceLabel(turn.device)}
+          <DeviceIcon kind={deviceKind(inferred ?? turn.device)} />
+          {inferred ? `Looking at ${inferred}` : deviceLabel(turn.device)}
         </span>
       </div>
+      {inferred && (
+        <p className="inferred-note">
+          You left the device on All devices, so I narrowed the search from the question.{" "}
+          <button className="link-btn" onClick={onSearchAll} disabled={!canSearchAll}>
+            Search all devices
+          </button>
+        </p>
+      )}
 
       {turn.stages.length > 0 || turn.status === "running" ? (
         <Timeline stages={turn.stages} running={turn.status === "running"} elapsed={turn.answer?.elapsed} />

@@ -57,6 +57,17 @@ question -> classify -> (error code?) exact lookup in error_codes.csv
 - The "Strong / Good / Check the sources" chip is derived from the best match distance and whether every step traced to a source. It is a label, never a percentage.
 - Every answer is logged to `data/feedback.db` (question, device, steps, sources, timings) so Insights has a real denominator. Nothing leaves the machine.
 
+### Speed and retrieval (no model upgrade)
+
+- **Fast path** (`src/fastpath.py`): when the best passage is a close match and holds a complete numbered procedure, the steps are shown verbatim and both model calls are skipped (answers in a few seconds, every step traceable, tagged "Copied from the manual"). For an error code it only uses a passage that actually names that code. Anything less certain takes the normal model path. Turn it off with `FAST_PATH=0`.
+- **Skipped relevance check**: on a strong match the small model's relevance call is replaced by a distance rule.
+- **Saved answers**: an in-memory cache returns a repeated question instantly. It is keyed on the question, device, library version, safety rules and settings, so adding or removing a document invalidates it.
+- **Stop really stops**: closing the stream stops the agent before its next stage starts.
+- **Hybrid search** (`src/retriever.py`): vector search is fused with BM25 keyword search (reciprocal rank fusion) so part numbers and codes in prose match exactly. The best vector hit is always kept, because its distance decides whether a question is answerable; keyword-only hits carry no distance and can never make an unrelated question look answerable. Turn it off with `HYBRID_SEARCH=0`.
+- **Passage headers**: each passage is embedded with "device | document | section" (the original text is kept for display), so a section titled with an error code is found by that code. Documents indexed in an older format are re-indexed from their saved files at startup (`python -m src.ingest --reindex` does the same by hand). Tables up to 1,500 characters stay in one piece.
+- **Glossary** (`data/glossary.json`): synonym groups such as note jam / cash jam / bill jam widen the search only; edit the file to match your own vocabulary.
+- **Device inference**: with the selector on All devices, a question that says ATM, POS or kiosk (when exactly one such model exists), or that names an error code belonging to one device, searches that device first and says so, with a one-tap "Search all devices".
+
 ## Accuracy scorecard
 
 `python -m src.evaluate` runs a fast retrieval-only check; `python -m src.evaluate --answers` runs every question end to end with the real model (about 10 minutes) and writes `docs/scorecard.md` and `docs/scorecard.json`, which the Insights page shows. The question set is `tests/eval_questions.json`: in-scope questions with the expected document and key phrases, unrelated questions that must be refused, error codes, and safety cases that must raise an alert. It measures the packaged sample library, so treat it as a regression guard and rough indicator, not a promise about your documents.
@@ -102,7 +113,7 @@ cd web; npm run build                      # type-checks the frontend, then bund
 
 ## Configuration
 
-All settings are in `config.py` and can be overridden with environment variables (`CHAT_MODEL`, `EMBED_MODEL`, `KEEP_ALIVE`, `RELEVANCE_MAX_DISTANCE`, `STRONG_DISTANCE`, `MINUTES_PER_ESCALATION`, `OLLAMA_BASE_URL`). Safety rules and the escalation contact are in `data/policies.json`. If you change the embedding model, delete the `vectorstore/` folder and re-index.
+All settings are in `config.py` and can be overridden with environment variables (`CHAT_MODEL`, `EMBED_MODEL`, `KEEP_ALIVE`, `RELEVANCE_MAX_DISTANCE`, `STRONG_DISTANCE`, `FAST_PATH`, `FAST_PATH_DISTANCE`, `HYBRID_SEARCH`, `CACHE_SIZE`, `MINUTES_PER_ESCALATION`, `OLLAMA_BASE_URL`). Safety rules and the escalation contact are in `data/policies.json`. If you change the embedding model, delete the `vectorstore/` folder and re-index.
 
 ## Limitations
 

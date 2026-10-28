@@ -7,6 +7,7 @@ DATA_DIR = ROOT / "data"
 MANUALS_DIR = DATA_DIR / "manuals"
 ERROR_CODES_CSV = DATA_DIR / "error_codes.csv"
 POLICIES_JSON = DATA_DIR / "policies.json"
+GLOSSARY_JSON = DATA_DIR / "glossary.json"
 FEEDBACK_DB = DATA_DIR / "feedback.db"
 DOCS_DIR = ROOT / "docs"
 # Default for the Insights time-saved estimate: engineer minutes avoided per question that was fixed
@@ -35,6 +36,15 @@ MAX_RETRIES = 2  # query rewrites before giving up
 RELEVANCE_MAX_DISTANCE = float(os.getenv("RELEVANCE_MAX_DISTANCE", "0.88"))
 # Best-chunk distance at or below this counts as a "Strong match" in the UI.
 STRONG_DISTANCE = float(os.getenv("STRONG_DISTANCE", "0.7"))
+
+# Speed. The fast path shows a close-matching numbered procedure verbatim and skips both model calls.
+FAST_PATH = os.getenv("FAST_PATH", "1") == "1"
+FAST_PATH_DISTANCE = float(os.getenv("FAST_PATH_DISTANCE", "0.6"))
+CACHE_SIZE = int(os.getenv("CACHE_SIZE", "64"))  # saved answers kept in memory; 0 turns the cache off
+
+# Retrieval. Keyword (BM25) search is fused with vector search so part numbers and codes match exactly.
+HYBRID_SEARCH = os.getenv("HYBRID_SEARCH", "1") == "1"
+INDEX_VERSION = 2  # bump when the stored chunk format changes; stale documents are re-indexed on startup
 
 # Uploads
 MAX_UPLOAD_MB = 50

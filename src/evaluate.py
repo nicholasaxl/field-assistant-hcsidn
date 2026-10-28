@@ -61,7 +61,8 @@ def score_retrieval(
     refused = 0
     for case in cases["out_of_scope"]:
         docs = retrieve_fn(case["question"], "all")
-        best = min((d.metadata["distance"] for d in docs), default=float("inf"))
+        # Keyword-only matches carry no distance; the answerability gate uses the vector distances.
+        best = min((d.metadata["distance"] for d in docs if "distance" in d.metadata), default=float("inf"))
         ok = best > gate
         refused += ok
         details.append({"kind": "out_of_scope", "question": case["question"], "ok": ok, "best_distance": round(best, 3)})

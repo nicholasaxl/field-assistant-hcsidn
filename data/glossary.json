@@ -1,0 +1,14 @@
+{
+  "groups": [
+    ["note jam", "cash jam", "bill jam", "banknote jam"],
+    ["receipt paper", "paper roll", "thermal roll"],
+    ["card reader", "chip reader", "emv reader"],
+    ["pin pad", "pinpad", "keypad"],
+    ["not detected", "not recognised", "not recognized", "not found"],
+    ["touchscreen", "touch screen", "touch panel"],
+    ["cash drawer", "till drawer", "money drawer"],
+    ["firmware update", "software update", "firmware upgrade"],
+    ["no network", "network down", "lost connection", "offline"],
+    ["blank receipt", "faint receipt", "empty receipt"]
+  ]
+}

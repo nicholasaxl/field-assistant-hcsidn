@@ -8,13 +8,15 @@ from __future__ import annotations
 import json
 import threading
 import time
+from collections import OrderedDict
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+import anyio
 import httpx
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -24,8 +26,59 @@ from src import prompts
 from src.error_lookup import ErrorCodeDB
 from src.feedback import FeedbackStore
 from src.graph import build_default_app
-from src.ingest import delete_document, get_store, ingest_file, list_documents
+from src.ingest import delete_document, get_store, ingest_file, list_documents, migrate_index
 from src.loader import SUPPORTED_EXTENSIONS, validate_upload
+
+
+class AnswerCache:
+    """Small in-memory LRU of finished answers, so a repeated question is instant."""
+
+    def __init__(self, size: int):
+        self.size = size
+        self._data: OrderedDict[str, dict] = OrderedDict()
+        self._lock = threading.Lock()
+
+    def get(self, key: str) -> dict | None:
+        with self._lock:
+            if key not in self._data:
+                return None
+            self._data.move_to_end(key)
+            return dict(self._data[key])
+
+    def put(self, key: str, value: dict) -> None:
+        if self.size <= 0:
+            return
+        with self._lock:
+            self._data[key] = dict(value)
+            self._data.move_to_end(key)
+            while len(self._data) > self.size:
+                self._data.popitem(last=False)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._data.clear()
+
+
+answer_cache = AnswerCache(config.CACHE_SIZE)
+_library_version = 0
+
+
+def bump_library_version() -> None:
+    """The documents changed, so every saved answer may be stale."""
+    global _library_version
+    _library_version += 1
+    answer_cache.clear()
+
+
+def answer_key(question: str, device: str, infer: bool = True) -> str:
+    """A saved answer is reused only for the same question, device, documents, safety rules and settings."""
+    try:
+        policy_stamp = config.POLICIES_JSON.stat().st_mtime
+    except OSError:
+        policy_stamp = 0
+    normalised = " ".join(question.lower().split())
+    return f"{normalised}|{device}|{infer}|{_library_version}|{policy_stamp}|{config.CHAT_MODEL}|{config.FAST_PATH}"
+
 
 def warm_up_models() -> None:
     """Load both models into memory so the first question doesn't wait for them. Best effort."""
@@ -44,9 +97,23 @@ def warm_up_models() -> None:
         pass  # Ollama may not be running yet; the health pill tells the user
 
 
+def migrate_in_background() -> None:
+    """Re-index documents stored in an older chunk format so they gain the newer search features."""
+    try:
+        store = get_resources()[0]
+        if migrate_index(store):
+            bump_library_version()
+    except Exception:
+        pass  # needs Ollama for embeddings; it retries on the next start
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    threading.Thread(target=warm_up_models, daemon=True).start()
+    def startup() -> None:
+        warm_up_models()
+        migrate_in_background()
+
+    threading.Thread(target=startup, daemon=True).start()
     yield
 
 
@@ -58,9 +125,11 @@ STAGE_LABELS = {
     "retrieve": "Searching the manuals",
     "grade": "Checking relevance",
     "rewrite": "Rephrasing the search",
+    "fast_answer": "Reading the procedure",
     "generate": "Writing the answer",
     "format_citations": "Verifying sources",
     "apply_policy": "Safety check",
+    "cache": "Found a saved answer",
     "fallback": "Nothing relevant found",
 }
 
@@ -99,16 +168,21 @@ def describe_stage(node: str, update: dict, state: dict) -> str:
     trace = update.get("trace") or [""]
     last = trace[-1]
     if node == "classify":
+        where = f", looking at {update['inferred_device']}" if update.get("inferred_device") else ""
         if update.get("intent") == "error_code":
             codes = ", ".join(dict.fromkeys(r["code"] for r in update.get("code_records", [])))
-            return f"Found error code {codes}"
-        return "Troubleshooting question" if update.get("intent") == "troubleshooting" else "No question to answer"
+            return f"Found error code {codes}{where}"
+        if update.get("intent") == "troubleshooting":
+            return f"Troubleshooting question{where}"
+        return "No question to answer"
     if node == "lookup_code":
         return "Using the exact entry from the error-code table"
     if node == "retrieve":
         count = len(update.get("docs", []))
         return f"{count} passage{'s' if count != 1 else ''} found"
     if node == "grade":
+        if "strong match" in last:
+            return f"Strong match, kept {len(update.get('docs', []))} of {len(state.get('docs', []))}, no model check needed"
         if "skipped" in last:
             return "Exact code match, keeping all passages"
         if "out of scope" in last:
@@ -118,6 +192,9 @@ def describe_stage(node: str, update: dict, state: dict) -> str:
         return f"Kept {len(update.get('docs', []))} of {len(state.get('docs', []))} passages"
     if node == "rewrite":
         return f"Trying: {update.get('query', '')}"
+    if node == "fast_answer":
+        steps = [line for line in update.get("answer", "").splitlines() if line.strip()]
+        return f"{len(steps)} steps copied word for word, no model needed"
     if node == "generate":
         count = len(update.get("sources", []))
         return f"From {count} source{'s' if count != 1 else ''}"
@@ -142,9 +219,56 @@ def sse(event: dict) -> str:
     return f"data: {json.dumps(event)}\n\n"
 
 
-def stream_answer(graph, question: str, device_model: str, feedback: FeedbackStore | None = None):
+def _record(feedback: FeedbackStore | None, question: str, device: str, payload: dict, elapsed: float, stages: list, cached: bool):
+    """Log an answer for Insights. Logging must never break an answer, so any failure just returns None."""
+    if feedback is None:
+        return None
+    try:
+        return feedback.log_interaction(
+            question=question,
+            device=device,
+            intent=payload.get("intent"),
+            fallback=payload["fallback"],
+            cached=cached,
+            elapsed=elapsed,
+            stages=stages,
+            steps=[b["text"] for b in payload["blocks"] if b["kind"] == "step"],
+            sources=[s["label"] for s in payload["sources"]],
+            codes=payload.get("codes", []),
+            alerts=payload["alerts"],
+        )
+    except Exception:
+        return None
+
+
+def stream_answer(
+    graph,
+    question: str,
+    device_model: str,
+    feedback: FeedbackStore | None = None,
+    cache: AnswerCache | None = None,
+    cache_key: str | None = None,
+    infer_device: bool = True,
+):
     started = time.perf_counter()
-    state: dict = {"question": question, "device_model": device_model}
+
+    if cache is not None and cache_key:
+        saved = cache.get(cache_key)
+        if saved is not None:
+            yield sse(
+                {
+                    "type": "stage",
+                    "node": "cache",
+                    "label": STAGE_LABELS["cache"],
+                    "detail": "Same question, documents unchanged",
+                    "at": 0.0,
+                }
+            )
+            interaction_id = _record(feedback, question, device_model, saved, 0.0, [{"node": "cache", "at": 0.0}], True)
+            yield sse({**saved, "type": "answer", "interaction_id": interaction_id, "cached": True, "elapsed": 0.0})
+            return
+
+    state: dict = {"question": question, "device_model": device_model, "infer_device": infer_device}
     stage_log: list[dict] = []
     try:
         for chunk in graph.stream(dict(state), stream_mode="updates"):
@@ -164,56 +288,76 @@ def stream_answer(graph, question: str, device_model: str, feedback: FeedbackSto
                     }
                 )
         answer = state.get("answer", "")
-        blocks = state.get("blocks", [])
         elapsed = round(time.perf_counter() - started, 1)
-        fallback = answer == prompts.FALLBACK
-
-        interaction_id = None
-        if feedback is not None:
-            try:  # logging must never break an answer
-                interaction_id = feedback.log_interaction(
-                    question=question,
-                    device=device_model,
-                    intent=state.get("intent"),
-                    fallback=fallback,
-                    elapsed=elapsed,
-                    stages=stage_log,
-                    steps=[b["text"] for b in blocks if b["kind"] == "step"],
-                    sources=[s["label"] for s in state.get("sources", [])],
-                    codes=[r["code"] for r in state.get("code_records", [])],
-                    alerts=state.get("alerts", []),
-                )
-            except Exception:
-                interaction_id = None
-
-        yield sse(
-            {
-                "type": "answer",
-                "interaction_id": interaction_id,
-                "fallback": fallback,
-                "intent": state.get("intent"),
-                "text": answer,
-                "blocks": blocks,
-                "sources": state.get("sources", []),
-                "alerts": state.get("alerts", []),
-                "strength": state.get("strength"),
-                "elapsed": elapsed,
-            }
-        )
+        payload = {
+            "fallback": answer == prompts.FALLBACK,
+            "intent": state.get("intent"),
+            "text": answer,
+            "blocks": state.get("blocks", []),
+            "sources": state.get("sources", []),
+            "alerts": state.get("alerts", []),
+            "strength": state.get("strength"),
+            "fast": bool(state.get("fast")),
+            "device_inferred": state.get("inferred_device"),
+            "codes": [r["code"] for r in state.get("code_records", [])],
+        }
+        if cache is not None and cache_key:
+            cache.put(cache_key, payload)
+        interaction_id = _record(feedback, question, device_model, payload, elapsed, stage_log, False)
+        public = {k: v for k, v in payload.items() if k != "codes"}
+        yield sse({**public, "type": "answer", "interaction_id": interaction_id, "cached": False, "elapsed": elapsed})
     except Exception as exc:  # surface a readable message instead of a dropped stream
         yield sse({"type": "error", "message": friendly_error(exc)})
+
+
+async def event_stream(request: Request, events):
+    """Feed a blocking event generator to the client, and stop working when the client goes away.
+
+    Closing the generator stops the agent before it starts its next stage, so pressing Stop frees the CPU
+    (a model call already in flight can't be interrupted, but nothing new starts).
+    """
+    iterator = iter(events)
+
+    def advance():
+        try:
+            return next(iterator)
+        except StopIteration:
+            return None
+
+    try:
+        while True:
+            if await request.is_disconnected():
+                break
+            chunk = await anyio.to_thread.run_sync(advance)
+            if chunk is None:
+                break
+            yield chunk
+    finally:
+        await anyio.to_thread.run_sync(iterator.close)
 
 
 class AskBody(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     device_model: str = config.ALL_DEVICES
+    infer_device: bool = True  # false: the engineer asked to search every device, so don't guess
 
 
 @api.post("/api/ask")
-def ask(body: AskBody):
-    _, _, graph = get_resources()
+async def ask(body: AskBody, request: Request):
+    _, _, graph = await anyio.to_thread.run_sync(get_resources)
+    question = body.question.strip()
+    device = body.device_model or config.ALL_DEVICES
+    events = stream_answer(
+        graph,
+        question,
+        device,
+        get_feedback_store(),
+        answer_cache,
+        answer_key(question, device, body.infer_device),
+        body.infer_device,
+    )
     return StreamingResponse(
-        stream_answer(graph, body.question.strip(), body.device_model or config.ALL_DEVICES, get_feedback_store()),
+        event_stream(request, events),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -273,6 +417,7 @@ def upload_documents(files: list[UploadFile] = File(...), device_model: str = Fo
             results.append({"name": safe_name, "status": result.status, "chunks": result.chunks})
         except Exception as exc:
             results.append({"name": name, "status": "error", "message": friendly_error(exc)})
+    bump_library_version()  # saved answers may no longer reflect the documents
     return {"results": results}
 
 
@@ -283,6 +428,7 @@ def remove_document(source: str):
     store, _, _ = get_resources()
     removed = delete_document(source, store)
     (config.MANUALS_DIR / source).unlink(missing_ok=True)
+    bump_library_version()
     if not removed:
         raise HTTPException(status_code=404, detail=f"'{source}' is not in the library")
     return {"removed": source, "chunks": removed}

@@ -73,18 +73,20 @@ export default function App() {
   }, [refreshLibrary]);
 
   const ask = useCallback(
-    async (question: string) => {
+    async (question: string, options?: { device?: string; infer?: boolean }) => {
       const text = question.trim();
       if (!text || running) return;
       const id = newId();
-      setTurns((t) => [...t, { id, question: text, device, status: "running", stages: [] }]);
+      const chosen = options?.device ?? device;
+      const infer = options?.infer ?? true;
+      setTurns((t) => [...t, { id, question: text, device: chosen, infer, status: "running", stages: [] }]);
       setDraft("");
       const controller = new AbortController();
       abortRef.current = controller;
 
       const update = (fn: (t: Turn) => Turn) => setTurns((ts) => ts.map((t) => (t.id === id ? fn(t) : t)));
       try {
-        await askStream(text, device, (event) => update((t) => applyEvent(t, event)), controller.signal);
+        await askStream(text, chosen, infer, (event) => update((t) => applyEvent(t, event)), controller.signal);
         update((t) =>
           t.status === "running" ? { ...t, status: "error", error: "The connection closed before an answer arrived." } : t,
         );
@@ -152,6 +154,8 @@ export default function App() {
                     onCite={(n) => openSources(turn.id, n)}
                     onOpenSources={() => openSources(turn.id, null)}
                     onOpenLibrary={() => setLibraryOpen(true)}
+                    onSearchAll={() => void ask(turn.question, { device: "all", infer: false })}
+                    canSearchAll={!running}
                   />
                 ))
               )}

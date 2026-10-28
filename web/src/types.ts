@@ -23,6 +23,9 @@ export type Reason = "step_failed" | "different_problem" | "doc_wrong" | "need_p
 export type Outcome = "fixed" | "not_fixed" | "escalated";
 
 export type AnswerData = {
+  fast: boolean;
+  cached: boolean;
+  device_inferred: string | null;
   interaction_id: string | null;
   alerts: Alert[];
   strength: Strength | null;
@@ -38,6 +41,7 @@ export type Turn = {
   id: string;
   question: string;
   device: string;
+  infer: boolean;
   status: "running" | "done" | "error";
   stages: Stage[];
   answer?: AnswerData;

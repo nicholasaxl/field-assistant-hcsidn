@@ -18,13 +18,14 @@ async function json<T>(res: Response): Promise<T> {
 export async function askStream(
   question: string,
   device: string,
+  infer: boolean,
   onEvent: (event: StreamEvent) => void,
   signal: AbortSignal,
 ): Promise<void> {
   const res = await fetch("/api/ask", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, device_model: device }),
+    body: JSON.stringify({ question, device_model: device, infer_device: infer }),
     signal,
   });
   if (!res.ok || !res.body) throw new Error(`Can't reach the assistant (${res.status}). Is the server running?`);

@@ -16,8 +16,11 @@ from langgraph.graph import END, START, StateGraph
 import config
 from src import prompts
 from src.citations import analyze, answer_strength, attribute
+from src.devices import infer_device
 from src.error_lookup import ErrorCodeDB
+from src.fastpath import pick_fast_steps
 from src.policy import evaluate as evaluate_policy
+from src.textutil import body_text
 
 
 class AgentState(TypedDict, total=False):
@@ -32,6 +35,9 @@ class AgentState(TypedDict, total=False):
     blocks: list  # structured answer for the UI: steps with their citations
     strength: dict  # coarse trust label for the UI
     alerts: list  # safety alerts decided by rules, not by the model
+    fast: bool  # the steps are the manual's own wording, shown without a model call
+    inferred_device: str | None  # device worked out from the question when none was chosen
+    infer_device: bool  # False when the engineer asked to search every device
     retries: int
     trace: list
 
@@ -46,12 +52,37 @@ def _doc_label(doc) -> str:
     return f"{meta.get('source', 'unknown')}" + (f", {where}" if where else "")
 
 
+def _build_sources(code_records: list, docs: list) -> list[dict]:
+    """What the answer is written from: exact error-table entries first, then the retrieved passages."""
+    return [
+        {
+            "label": f"Error code {r['code']} ({r['device_model']})",
+            "text": f"{r['meaning']} Fix: {r['fix']} Severity: {r['severity']}",
+            "kind": "error_code",
+            "distance": None,
+            "device": r["device_model"],
+        }
+        for r in code_records
+    ] + [
+        {
+            "label": _doc_label(d),
+            "text": body_text(d),
+            "kind": "document",
+            "distance": d.metadata.get("distance"),
+            "device": d.metadata.get("device_model"),
+        }
+        for d in docs
+    ]
+
+
 def build_graph(
     llm,
     retrieve_fn: Callable[[str, str | None], list],
     code_db: ErrorCodeDB,
     max_retries: int = config.MAX_RETRIES,
     policy_fn: Callable[[str, list, str], list] = evaluate_policy,
+    known_devices_fn: Callable[[], list[str]] | None = None,
+    fast_path: bool = config.FAST_PATH,
 ):
     """Compile the agent. `llm` needs .invoke(str); `retrieve_fn(query, device_model)` returns Documents."""
 
@@ -59,14 +90,21 @@ def build_graph(
         question = state["question"].strip()
         if not question:
             return {"intent": "out_of_scope", "trace": ["classify: empty question"]}
-        records = code_db.find(question, state.get("device_model"))
+        device = state.get("device_model") or config.ALL_DEVICES
+        records = code_db.find(question, device)
         intent = "error_code" if records else "troubleshooting"
+        inferred = None
+        if device == config.ALL_DEVICES and known_devices_fn is not None and state.get("infer_device", True):
+            inferred = infer_device(question, records, known_devices_fn())
+        note = f"classify: {intent}" + (f" ({len(records)} record(s))" if records else "")
         return {
             "intent": intent,
             "code_records": records,
             "query": question,
             "retries": 0,
-            "trace": [f"classify: {intent}" + (f" ({len(records)} record(s))" if records else "")],
+            "device_model": inferred or device,
+            "inferred_device": inferred,
+            "trace": [note + (f", device inferred: {inferred}" if inferred else "")],
         }
 
     def lookup_code(state: AgentState) -> dict:
@@ -91,7 +129,12 @@ def build_graph(
             # chunk was exactly right (e.g. a question that doesn't name the device).
             note = f"grade: best distance {min(distances):.2f} > {config.RELEVANCE_MAX_DISTANCE}, out of scope"
             return {"docs": [], "trace": state["trace"] + [note]}
-        passages = "\n\n".join(f"[{i}] {d.page_content[:600]}" for i, d in enumerate(docs, start=1))
+        if distances and (len(docs) == 1 or min(distances) <= config.STRONG_DISTANCE):
+            # A strong top match needs no model opinion: keep it and anything about as close, skip the call.
+            best = min(distances)
+            kept = [d for d in docs if d.metadata.get("distance", best) <= best + 0.15][:3]
+            return {"docs": kept, "trace": state["trace"] + [f"grade: skipped (strong match), kept {len(kept)}/{len(docs)}"]}
+        passages = "\n\n".join(f"[{i}] {body_text(d)[:600]}" for i, d in enumerate(docs, start=1))
         reply = _text(llm.invoke(prompts.GRADE.format(question=state["question"], passages=passages)))
         numbers = {int(n) for n in re.findall(r"\d+", reply)}
         if numbers:
@@ -118,26 +161,28 @@ def build_graph(
             "trace": state["trace"] + [f"rewrite #{retries}: {new_query[:80]}"],
         }
 
+    def route_after_retrieve(state: AgentState) -> str:
+        if fast_path and state.get("intent") in ("error_code", "troubleshooting"):
+            doc, _steps = pick_fast_steps(state["question"], state["docs"], state["code_records"], config.FAST_PATH_DISTANCE)
+            if doc is not None:
+                return "fast_answer"
+        return "grade"
+
+    def fast_answer(state: AgentState) -> dict:
+        """Show the manual's own numbered steps; no model call, every step traceable."""
+        doc, steps = pick_fast_steps(state["question"], state["docs"], state["code_records"], config.FAST_PATH_DISTANCE)
+        sources = _build_sources(state["code_records"], [doc])
+        answer = "\n".join(f"{i}. {step}" for i, step in enumerate(steps, start=1))
+        return {
+            "docs": [doc],
+            "answer": answer,
+            "sources": sources,
+            "fast": True,
+            "trace": state["trace"] + [f"fast_answer: {len(steps)} step(s) from {_doc_label(doc)}"],
+        }
+
     def generate(state: AgentState) -> dict:
-        sources = [
-            {
-                "label": f"Error code {r['code']} ({r['device_model']})",
-                "text": f"{r['meaning']} Fix: {r['fix']} Severity: {r['severity']}",
-                "kind": "error_code",
-                "distance": None,
-                "device": r["device_model"],
-            }
-            for r in state["code_records"]
-        ] + [
-            {
-                "label": _doc_label(d),
-                "text": d.page_content,
-                "kind": "document",
-                "distance": d.metadata.get("distance"),
-                "device": d.metadata.get("device_model"),
-            }
-            for d in state["docs"]
-        ]
+        sources = _build_sources(state["code_records"], state["docs"])
         context = "\n\n".join(f"[{i}] ({s['label']}) {s['text']}" for i, s in enumerate(sources, start=1))
         answer = _text(llm.invoke(prompts.ANSWER.format(context=context, question=state["question"]))).strip()
         return {"answer": answer, "sources": sources, "trace": state["trace"] + ["generate"]}
@@ -179,6 +224,7 @@ def build_graph(
         ("retrieve", retrieve),
         ("grade", grade),
         ("rewrite", rewrite),
+        ("fast_answer", fast_answer),
         ("generate", generate),
         ("format_citations", format_citations),
         ("apply_policy", apply_policy),
@@ -193,7 +239,8 @@ def build_graph(
         {"lookup_code": "lookup_code", "retrieve": "retrieve", "fallback": "fallback"},
     )
     graph.add_edge("lookup_code", "retrieve")
-    graph.add_edge("retrieve", "grade")
+    graph.add_conditional_edges("retrieve", route_after_retrieve, {"fast_answer": "fast_answer", "grade": "grade"})
+    graph.add_edge("fast_answer", "format_citations")
     graph.add_conditional_edges(
         "grade", route_after_grade, {"generate": "generate", "rewrite": "rewrite", "fallback": "fallback"}
     )
@@ -221,11 +268,20 @@ def build_default_app(store=None, code_db: ErrorCodeDB | None = None):
     from src.ingest import get_store
     from src.retriever import retrieve
 
+    from src.ingest import list_documents
+
     store = store or get_store()
+    code_db = code_db or ErrorCodeDB()
+
+    def known_devices() -> list[str]:
+        library = {d["device_model"] for d in list_documents(store)}
+        return sorted((set(code_db.devices()) | library) - {config.ALL_DEVICES})
+
     return build_graph(
         make_llm(),
         lambda query, device: retrieve(query, store, device),
-        code_db or ErrorCodeDB(),
+        code_db,
+        known_devices_fn=known_devices,
     )
 
 
