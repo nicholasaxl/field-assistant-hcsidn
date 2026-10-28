@@ -1,0 +1,34 @@
+{
+  "escalation_contact": "Level 2 support desk (set the real number in data/policies.json)",
+  "critical_severities": ["Critical"],
+  "keyword_rules": [
+    {
+      "id": "tampering",
+      "level": "critical",
+      "keywords": ["skimmer", "skimming", "tamper", "tampered", "card trap", "foreign device", "suspicious device"],
+      "title": "Possible tampering",
+      "message": "Take the device out of service, do not touch anything else, photograph it and call security."
+    },
+    {
+      "id": "encryption-keys",
+      "level": "critical",
+      "keywords": ["encryption key", "key loading", "key custodian", "master key", "pin pad key"],
+      "title": "Encryption keys",
+      "message": "Key faults are handled only by the key custodian. Do not reboot repeatedly or reload keys yourself."
+    },
+    {
+      "id": "cash-discrepancy",
+      "level": "warning",
+      "keywords": ["cash discrepancy", "counted notes differ", "missing cash", "cash is short", "notes are missing"],
+      "title": "Cash discrepancy",
+      "message": "Keep the device out of service, record the difference with the second person and escalate to cash operations."
+    },
+    {
+      "id": "two-person-control",
+      "level": "warning",
+      "keywords": ["safe door", "open the safe", "vault", "loading cash", "refill the cassette"],
+      "title": "Two-person control",
+      "message": "Cash and safe work needs two authorised people. Never work alone."
+    }
+  ]
+}

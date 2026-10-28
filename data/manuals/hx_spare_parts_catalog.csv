@@ -1,0 +1,25 @@
+part_number,description,device_model,used_for,replace_interval,replace_when
+HX-P200-PR80,Thermal paper roll 80 mm,HX-POS-200,Receipt printer,As needed,Receipt blank or faint; flip the roll first. Error P-1001 when empty
+HX-P200-PH01,Print head,HX-POS-200,Receipt printer,24 months,Streaks or missing dots; error P-1003 when overheating repeats
+HX-P200-PL02,Platen roller,HX-POS-200,Receipt printer,18 months,Paper slips or jams repeatedly (P-1002)
+HX-P200-EMV1,EMV card reader module,HX-POS-200,Card payments,36 months,Reader not detected (P-1010) or chip read failures (P-1011)
+HX-P200-NFC1,Contactless antenna cable,HX-POS-200,Contactless payments,As needed,Contactless reader timeout (P-1012)
+HX-P200-CBL6,Cash drawer cable (RJ12),HX-POS-200,Cash drawer,As needed,Cash drawer fails to open (P-3001)
+HX-P200-TSC1,Touchscreen panel,HX-POS-200,Display,48 months,Calibration error persists after recalibration (P-4001)
+HX-P200-DSC1,Customer display cable,HX-POS-200,Customer display,As needed,Display flickers or is not detected (P-4002)
+HX-A500-PICK,Note pick roller kit,HX-ATM-500,Cash dispenser,12 months,Repeated note jams (A-1001) or double picks
+HX-A500-BELT,Transport belt set,HX-ATM-500,Cash dispenser,24 months,Notes skew or stall in the transport path
+HX-A500-CST2,"Cash cassette 2,000 notes",HX-ATM-500,Cash dispenser,60 months,Cassette not detected after cleaning the connector (A-1002)
+HX-A500-SEAL,Cassette security seals (pack of 100),HX-ATM-500,Cash handling,Each refill,Used at every cassette replenishment
+HX-A500-SHUT,Card reader shutter assembly,HX-ATM-500,Card reader,24 months,Card reader jam (A-2001) with a worn shutter
+HX-A500-PINP,Encrypting PIN pad,HX-ATM-500,PIN entry,60 months,Keys not responding after a failed self test (A-4002)
+HX-A500-RPT1,Receipt printer paper roll,HX-ATM-500,Receipt printer,As needed,Receipt paper out (A-3001)
+HX-A500-JRN1,Journal printer ribbon,HX-ATM-500,Journal printer,6 months,Journal printer fault (A-3002)
+HX-A500-DSNS,Door sensor,HX-ATM-500,Security,36 months,Door open alarm although doors are closed (A-6001)
+HX-K300-CRD1,Card reader,HX-KIOSK-300,Card reader,36 months,Reader not detected (K-1001) after cable swap
+HX-K300-CLN25,Reader cleaning cards (pack of 25),HX-KIOSK-300,Card reader,Monthly,Read errors on several cards (K-1002)
+HX-K300-TPR1,Ticket paper roll,HX-KIOSK-300,Ticket printer,As needed,Ticket paper out (K-2001)
+HX-K300-CUT1,Ticket cutter blade,HX-KIOSK-300,Ticket printer,12 months,Cutter jam (K-2002)
+HX-K300-FAN1,Cabinet fan,HX-KIOSK-300,Cabinet cooling,36 months,Cabinet temperature high (K-5002)
+HX-K300-FLT1,Dust filter,HX-KIOSK-300,Cabinet cooling,6 months,Cabinet temperature high (K-5002) after the fan checks out
+HX-K300-ACC1,Cash acceptor unit,HX-KIOSK-300,Cash acceptor,48 months,Cash acceptor jam keeps returning (K-6001)

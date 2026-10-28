@@ -10,6 +10,7 @@ const NEXT_LABEL: Record<string, string> = {
   retrieve: "Checking relevance",
   rewrite: "Searching the manuals",
   generate: "Verifying sources",
+  format_citations: "Safety check",
 };
 
 /** What the agent is doing right now, inferred from the last stage that finished. */

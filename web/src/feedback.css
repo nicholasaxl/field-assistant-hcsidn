@@ -1,0 +1,191 @@
+/* ---------- Safety alerts, answer strength, procedure gate ---------- */
+.alerts {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 14px;
+  max-width: 62ch;
+}
+.alert {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+}
+.alert .icon {
+  margin-top: 2px;
+}
+.alert[data-level="critical"] {
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 38%, transparent);
+  color: var(--ink);
+}
+.alert[data-level="critical"] .icon,
+.alert[data-level="critical"] .alert-title {
+  color: var(--danger);
+}
+.alert[data-level="warning"] {
+  background: var(--warn-soft);
+  border-color: color-mix(in srgb, var(--warn) 32%, transparent);
+}
+.alert[data-level="warning"] .icon,
+.alert[data-level="warning"] .alert-title {
+  color: var(--warn);
+}
+.alert-title {
+  font-weight: 650;
+  margin-bottom: 2px;
+}
+.alert-message {
+  color: var(--ink-2);
+}
+.strength {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+.strength-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.strength[data-level="strong"] .strength-dot {
+  background: var(--ok);
+}
+.strength[data-level="check"] {
+  color: var(--warn);
+}
+.strength[data-level="check"] .strength-dot {
+  background: var(--warn);
+}
+.gate {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  max-width: 62ch;
+  margin-bottom: 8px;
+  padding: 16px;
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--r-md);
+  color: var(--ink-2);
+}
+
+/* ---------- Did this fix it? ---------- */
+.feedback {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  max-width: 62ch;
+}
+.feedback-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.feedback-form {
+  display: grid;
+  gap: 12px;
+}
+.feedback-q {
+  margin: 0 6px 0 0;
+  font-weight: 600;
+}
+.feedback-help {
+  margin-top: -6px;
+  color: var(--ink-2);
+  font-size: 13.5px;
+}
+.feedback .pill-btn {
+  height: 36px;
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.feedback .primary-btn {
+  height: 38px;
+  padding: 0 16px;
+}
+.feedback-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ok);
+  font-weight: 500;
+}
+.feedback-undo {
+  margin: 0 0 0 4px;
+}
+.reason-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.reason-chip {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s, transform 0.2s var(--ease);
+}
+.reason-chip:hover {
+  background: var(--sunken);
+}
+.reason-chip:active {
+  transform: scale(0.97);
+}
+.reason-chip[aria-checked="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+.feedback-note {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface-solid);
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.feedback-note:focus {
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+.feedback-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.sample-banner .pill-btn {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.feedback-error {
+  margin-top: 10px;
+  color: var(--danger);
+  font-size: 13.5px;
+}
+.handoff {
+  max-height: 300px;
+  margin: 0;
+  padding: 14px;
+  overflow: auto;
+  border-radius: var(--r-md);
+  background: var(--sunken);
+  color: var(--ink);
+  font: 13px/1.6 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

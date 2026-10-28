@@ -1,4 +1,4 @@
-import type { DocInfo, Health, StreamEvent, UploadResult } from "./types";
+import type { DocInfo, Health, InsightsData, Outcome, Reason, Scorecard, StreamEvent, UploadResult } from "./types";
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -57,7 +57,31 @@ export async function uploadDocuments(files: File[], deviceModel: string) {
   return json<{ results: UploadResult[] }>(await fetch("/api/documents", { method: "POST", body: form }));
 }
 
-export const deleteDocument = (source: string) =>
+const post = (url: string, body: unknown) =>
+  fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+export const postFeedback = (interactionId: string, outcome: Outcome, reason?: Reason, note?: string) =>
+  post("/api/feedback", { interaction_id: interactionId, outcome, reason: reason ?? null, note: note || null }).then((r) =>
+    json<{ ok: boolean; handoff: string | null }>(r),
+  );
+
+export const undoFeedback = (interactionId: string) =>
+  fetch(`/api/feedback/${encodeURIComponent(interactionId)}`, { method: "DELETE" }).then((r) => json<{ ok: boolean }>(r));
+
+export const postStep = (interactionId: string, index: number, result: "done" | "failed" | null) =>
+  post("/api/steps", { interaction_id: interactionId, index, result }).then((r) => json<{ ok: boolean }>(r));
+
+export const getInsights = (days: number, minutes: number | null) =>
+  fetch(`/api/insights?days=${days}${minutes === null ? "" : `&minutes=${minutes}`}`).then((r) => json<InsightsData>(r));
+
+export const loadSampleData = () => post("/api/insights/sample", {}).then((r) => json<{ loaded: number }>(r));
+export const removeSampleData = () =>
+  fetch("/api/insights/sample", { method: "DELETE" }).then((r) => json<{ removed: number }>(r));
+export const clearAllData = () =>
+  fetch("/api/insights/data", { method: "DELETE" }).then((r) => json<{ removed: number }>(r));
+export const getScorecard = () => fetch("/api/scorecard").then((r) => json<Scorecard>(r));
+
+export const deleteDocument =(source: string) =>
   fetch(`/api/documents/${encodeURIComponent(source)}`, { method: "DELETE" }).then((r) =>
     json<{ removed: string }>(r),
   );

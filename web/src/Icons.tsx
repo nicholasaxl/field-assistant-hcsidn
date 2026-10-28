@@ -34,7 +34,22 @@ export const SourcesIcon = (p: IconProps) => (
     <path d="M9 9h6M9 12.5h4" />
   </Svg>
 );
-export const Send = (p: IconProps) => (
+export const InsightsIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M5 20V11M12 20V4M19 20v-6" />
+  </Svg>
+);
+export const ThumbUp = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M7 11v9H4v-9h3ZM7 11l3.5-7a2 2 0 0 1 2 2.2L12 9h5.6a2 2 0 0 1 2 2.4l-1.3 6.6a2 2 0 0 1-2 1.6H7" />
+  </Svg>
+);
+export const ThumbDown = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M17 13V4h3v9h-3ZM17 13l-3.5 7a2 2 0 0 1-2-2.2L12 15H6.4a2 2 0 0 1-2-2.4l1.3-6.6a2 2 0 0 1 2-1.6H17" />
+  </Svg>
+);
+export const Send =(p: IconProps) => (
   <Svg {...p}>
     <path d="M12 19V5M5.5 11.5 12 5l6.5 6.5" />
   </Svg>

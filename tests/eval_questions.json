@@ -1,14 +1,45 @@
-[
-  {"question": "The receipt printer on the POS has a paper jam, what should I do?", "device_model": "HX-POS-200", "expected_source": "pos_receipt_printer_runbook.md"},
-  {"question": "Receipts are printing blank", "device_model": "HX-POS-200", "expected_source": "pos_receipt_printer_runbook.md"},
-  {"question": "Cash drawer will not open after a sale", "device_model": "HX-POS-200", "expected_source": "pos_receipt_printer_runbook.md"},
-  {"question": "How do I clear a note jam in the ATM dispenser?", "device_model": "HX-ATM-500", "expected_source": "atm_cash_dispenser_jam_runbook.md"},
-  {"question": "ATM cash cassette is not detected", "device_model": "HX-ATM-500", "expected_source": "atm_cash_dispenser_jam_runbook.md"},
-  {"question": "Who needs to be present when opening the ATM safe?", "device_model": "HX-ATM-500", "expected_source": "atm_cash_dispenser_jam_runbook.md"},
-  {"question": "Kiosk card reader is not being detected", "device_model": "HX-KIOSK-300", "expected_source": "kiosk_card_reader_runbook.md"},
-  {"question": "Kiosk card reader gives repeated read errors", "device_model": "HX-KIOSK-300", "expected_source": "kiosk_card_reader_runbook.md"},
-  {"question": "Kiosk touchscreen touches are offset", "device_model": "HX-KIOSK-300", "expected_source": "kiosk_card_reader_runbook.md"},
-  {"question": "Device has IP address 169.254.x.x and cannot reach the host", "device_model": "all", "expected_source": "network_connectivity_runbook.md"},
-  {"question": "Payment host timeouts but ping works", "device_model": "all", "expected_source": "network_connectivity_runbook.md"},
-  {"question": "Several devices at one site lost connectivity at once", "device_model": "all", "expected_source": "network_connectivity_runbook.md"}
-]
+{
+  "in_scope": [
+    {"question": "The receipt printer on the POS has a paper jam, what should I do?", "device_model": "HX-POS-200", "expected_source": ["pos_receipt_printer_runbook.md"], "expect_any": ["cover", "paper"]},
+    {"question": "Receipts are printing blank", "device_model": "HX-POS-200", "expected_source": ["pos_receipt_printer_runbook.md"], "expect_any": ["flip", "upside"]},
+    {"question": "Cash drawer will not open after a sale", "device_model": "HX-POS-200", "expected_source": ["pos_receipt_printer_runbook.md"], "expect_any": ["rj12", "drawer-kick", "key release"]},
+    {"question": "How do I clear a note jam in the ATM dispenser?", "device_model": "HX-ATM-500", "expected_source": ["atm_cash_dispenser_jam_runbook.md"], "expect_any": ["transport path", "pick area"]},
+    {"question": "ATM cash cassette is not detected", "device_model": "HX-ATM-500", "expected_source": ["atm_cash_dispenser_jam_runbook.md"], "expect_any": ["reseat", "cassette id"]},
+    {"question": "Who needs to be present when opening the ATM safe?", "device_model": "HX-ATM-500", "expected_source": ["atm_cash_dispenser_jam_runbook.md", "hx-atm-500_cash_cassette_replenishment.docx"], "expect_any": ["second", "two"]},
+    {"question": "Kiosk card reader is not being detected", "device_model": "HX-KIOSK-300", "expected_source": ["kiosk_card_reader_runbook.md"], "expect_any": ["reseat", "usb"]},
+    {"question": "Kiosk card reader gives repeated read errors", "device_model": "HX-KIOSK-300", "expected_source": ["kiosk_card_reader_runbook.md"], "expect_any": ["cleaning card"]},
+    {"question": "Kiosk touchscreen touches are offset", "device_model": "HX-KIOSK-300", "expected_source": ["kiosk_card_reader_runbook.md"], "expect_any": ["calibrat"]},
+    {"question": "Device has IP address 169.254.x.x and cannot reach the host", "device_model": "all", "expected_source": ["network_connectivity_runbook.md"], "expect_any": ["dhcp", "gateway"]},
+    {"question": "Payment host timeouts but ping works", "device_model": "all", "expected_source": ["network_connectivity_runbook.md"], "expect_any": ["firewall", "port"]},
+    {"question": "Several devices at one site lost connectivity at once", "device_model": "all", "expected_source": ["network_connectivity_runbook.md"], "expect_any": ["network team", "router", "wan"]},
+    {"question": "How many notes can an ATM cassette hold?", "device_model": "all", "expected_source": ["hx-atm-500_cash_cassette_replenishment.docx"], "expect_any": ["2,000", "2000", "1,500"]},
+    {"question": "How do I reset the cassette counters after refilling?", "device_model": "all", "expected_source": ["hx-atm-500_cash_cassette_replenishment.docx"], "expect_any": ["counters"]},
+    {"question": "What if the counted notes don't match the cash sheet?", "device_model": "all", "expected_source": ["hx-atm-500_cash_cassette_replenishment.docx"], "expect_any": ["escalate", "cash operations", "out of service"]},
+    {"question": "How do I roll back a failed kiosk firmware update?", "device_model": "all", "expected_source": ["hx-kiosk-300_firmware_update_guide.pdf"], "expect_any": ["restore previous version", "recovery"]},
+    {"question": "Kiosk firmware download stops at 40 percent", "device_model": "all", "expected_source": ["hx-kiosk-300_firmware_update_guide.pdf"], "expect_any": ["download again", "network", "disk"]},
+    {"question": "Which firmware version needs a Rev C card reader?", "device_model": "all", "expected_source": ["hx-kiosk-300_firmware_update_guide.pdf"], "expect_any": ["3.6"]},
+    {"question": "What is the part number for the ATM pick roller kit?", "device_model": "all", "expected_source": ["hx_spare_parts_catalog.csv"], "expect_any": ["hx-a500-pick"]},
+    {"question": "How often should the kiosk dust filter be replaced?", "device_model": "all", "expected_source": ["hx_spare_parts_catalog.csv"], "expect_any": ["6 months", "hx-k300-flt1"]},
+    {"question": "The customer display flickers during a sale", "device_model": "HX-POS-200", "expected_source": ["pos_customer_display_flicker.md"], "expect_any": ["cable", "60 hz", "refresh"]}
+  ],
+  "error_codes": [
+    {"question": "I'm getting P-1002 on the terminal", "device_model": "HX-POS-200", "expect_code": "P-1002"},
+    {"question": "ATM shows A-1003", "device_model": "HX-ATM-500", "expect_code": "A-1003"},
+    {"question": "Kiosk error K-7002 after the update", "device_model": "HX-KIOSK-300", "expect_code": "K-7002"}
+  ],
+  "out_of_scope": [
+    {"question": "What is the best recipe for sourdough bread?"},
+    {"question": "Who won the football match yesterday?"},
+    {"question": "How do I reset my email password?"},
+    {"question": "What is the capital of France?"},
+    {"question": "Write me a poem about the ocean"},
+    {"question": "How do I change the Wi-Fi password on my home router?"}
+  ],
+  "critical": [
+    {"question": "ATM shows A-2002", "device_model": "HX-ATM-500", "expect_alert": "code-A-2002"},
+    {"question": "A-4001 PIN pad encryption key error", "device_model": "HX-ATM-500", "expect_alert": "code-A-4001"},
+    {"question": "I think there is a skimmer on the card slot", "device_model": "all", "expect_alert": "tampering"},
+    {"question": "The counted notes differ from the cash sheet", "device_model": "HX-ATM-500", "expect_alert": "cash-discrepancy"},
+    {"question": "I need to open the safe door and refill the cassette", "device_model": "HX-ATM-500", "expect_alert": "two-person-control"}
+  ]
+}

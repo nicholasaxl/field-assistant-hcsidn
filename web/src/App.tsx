@@ -4,6 +4,7 @@ import { Composer } from "./Composer";
 import { EvidenceDock } from "./Evidence";
 import { Header } from "./Header";
 import { Hero } from "./Hero";
+import { Insights } from "./Insights";
 import { Library } from "./Library";
 import { TurnView } from "./TurnView";
 import type { DocInfo, Health, StreamEvent, Turn } from "./types";
@@ -33,9 +34,11 @@ export default function App() {
   const [device, setDevice] = useState("all");
   const [devices, setDevices] = useState<string[]>([]);
   const [docs, setDocs] = useState<DocInfo[]>([]);
+  const [libraryReady, setLibraryReady] = useState(false);
   const [library, setLibrary] = useState({ extensions: [".pdf", ".md"] as string[], maxMb: 50 });
   const [health, setHealth] = useState<Health | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [insightsOpen, setInsightsOpen] = useState(false);
   const [evidence, setEvidence] = useState<{ turnId: string; n: number | null; open: boolean } | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
@@ -43,16 +46,22 @@ export default function App() {
   const running = turns.some((t) => t.status === "running");
 
   const refreshLibrary = useCallback(async () => {
-    try {
-      const [{ documents, extensions, max_mb }, deviceList] = await Promise.all([getDocuments(), getDevices()]);
-      setDocs(documents);
-      setDevices(deviceList);
-      setLibrary({ extensions, maxMb: max_mb });
-      // A device that disappeared from the library can't stay selected.
-      setDevice((current) => (current === "all" || deviceList.includes(current) ? current : "all"));
-    } catch {
-      /* the header health pill already tells the user the server is unreachable */
+    // The server may still be starting when the page first loads, so retry with a growing pause.
+    for (let attempt = 0; attempt < 6; attempt++) {
+      try {
+        const [{ documents, extensions, max_mb }, deviceList] = await Promise.all([getDocuments(), getDevices()]);
+        setDocs(documents);
+        setDevices(deviceList);
+        setLibrary({ extensions, maxMb: max_mb });
+        setLibraryReady(true);
+        // A device that disappeared from the library can't stay selected.
+        setDevice((current) => (current === "all" || deviceList.includes(current) ? current : "all"));
+        return;
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
+      }
     }
+    /* still failing: the header health pill already tells the user the server is unreachable */
   }, []);
 
   useEffect(() => {
@@ -114,9 +123,11 @@ export default function App() {
         theme={theme}
         onTheme={toggleTheme}
         health={health}
-        docCount={docs.length}
+        docCount={libraryReady ? docs.length : null}
         libraryOpen={libraryOpen}
         onLibrary={() => setLibraryOpen((o) => !o)}
+        insightsOpen={insightsOpen}
+        onInsights={() => setInsightsOpen((o) => !o)}
         sourcesAvailable={Boolean(latestWithSources)}
         sourcesOpen={sourcesOpen}
         onSources={() =>
@@ -167,6 +178,15 @@ export default function App() {
           onClose={() => setEvidence((e) => (e ? { ...e, open: false } : e))}
         />
       </main>
+
+      <Insights
+        open={insightsOpen}
+        onClose={() => setInsightsOpen(false)}
+        onOpenLibrary={() => {
+          setInsightsOpen(false);
+          setLibraryOpen(true);
+        }}
+      />
 
       <Library
         open={libraryOpen}

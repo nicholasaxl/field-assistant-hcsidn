@@ -32,6 +32,9 @@ Expect roughly 10-25 seconds per answer on a CPU-only laptop.
 - **Sources panel.** The passages the answer was written from, a plain-language match level, and expandable excerpts.
 - **Library.** Drag in PDF, DOCX, Markdown, TXT or CSV files, tag them with a device model, and add or remove documents. Re-adding an unchanged file is skipped.
 - **Device switch.** Narrow answers to one device model; chunks tagged for all devices always stay in scope.
+- **Did this fix it?** Every answer ends with Fixed it / Didn't fix it. "Didn't fix it" asks what happened and produces a plain-text **handoff summary** (problem, device, error codes, the procedure suggested, which step failed, sources, the engineer's note) to copy to the next level of support. Answers with nothing found offer "Escalate with a summary".
+- **Safety alerts.** Rules in `data/policies.json` (not the model) raise an alert for Critical error codes and risky topics: possible tampering, encryption keys, cash discrepancies, two-person cash work. For Critical alerts the procedure stays hidden behind "Show the documented procedure". Edit the file to change wording, keywords and the escalation contact.
+- **Insights.** Questions per day, what people ask about, fix rate (with how many answers actually got a response), an *estimated* engineer-time saving (answers fixed × minutes you set, never presented as a measurement), gaps in the library (questions with no answer or marked not fixed, grouped), per-document fix rate, the steps that fail most, and the last accuracy check. Data lives locally in `data/feedback.db`; Export CSV and Clear data are on the page. "Preview with sample data" fills the page with clearly labelled **invented** numbers for demos; it replaces the view until removed and never mixes with real data.
 - Light and dark themes, keyboard focus states, reduced-motion support, responsive down to phone width.
 
 ## How it works
@@ -40,8 +43,8 @@ Expect roughly 10-25 seconds per answer on a CPU-only laptop.
 upload / data/manuals -> loader -> split -> embed (Ollama) -> Chroma (vectorstore/)
 
 question -> classify -> (error code?) exact lookup in error_codes.csv
-                     -> retrieve -> grade -> generate -> verify citations
-                           ^           |
+                     -> retrieve -> grade -> generate -> verify citations -> safety check
+                           ^           |                                        ^
                         rewrite <------+ (nothing close, max 2 retries) -> "not found, escalate"
 ```
 
@@ -50,6 +53,13 @@ question -> classify -> (error code?) exact lookup in error_codes.csv
 - "Is this answerable from the documents?" is decided by retrieval distance (`RELEVANCE_MAX_DISTANCE` in `config.py`), not by the small model. The grader only prunes lower-ranked chunks and can never veto the best one. If you change the embedding model, re-tune the threshold with `python -m src.evaluate`.
 - Citations are computed, not trusted: `src/citations.py` strips the model's own `[n]` markers and attaches the sources whose text actually contains each step.
 - Models stay loaded for `KEEP_ALIVE` seconds (default 30 minutes) and are warmed at startup, so the first question doesn't pay a reload.
+- The safety check (`src/policy.py`) runs on every path, including "not found", and is plain rules over the question, the error-code severity and the answer text.
+- The "Strong / Good / Check the sources" chip is derived from the best match distance and whether every step traced to a source. It is a label, never a percentage.
+- Every answer is logged to `data/feedback.db` (question, device, steps, sources, timings) so Insights has a real denominator. Nothing leaves the machine.
+
+## Accuracy scorecard
+
+`python -m src.evaluate` runs a fast retrieval-only check; `python -m src.evaluate --answers` runs every question end to end with the real model (about 10 minutes) and writes `docs/scorecard.md` and `docs/scorecard.json`, which the Insights page shows. The question set is `tests/eval_questions.json`: in-scope questions with the expected document and key phrases, unrelated questions that must be refused, error codes, and safety cases that must raise an alert. It measures the packaged sample library, so treat it as a regression guard and rough indicator, not a promise about your documents.
 
 ## Project layout
 
@@ -86,12 +96,13 @@ The dev UI is at http://localhost:5173 and proxies `/api` to port 8000.
 ```
 .venv\Scripts\python -m pytest -q          # backend, no Ollama needed
 cd web; npm run build                      # type-checks the frontend, then bundles it
-.venv\Scripts\python -m src.evaluate       # retrieval hit rate on tests/eval_questions.json (needs Ollama)
+.venv\Scripts\python -m src.evaluate       # retrieval-only scorecard (needs Ollama for embeddings)
+.venv\Scripts\python -m src.evaluate --answers   # full end-to-end scorecard, writes docs/scorecard.*
 ```
 
 ## Configuration
 
-All model settings are in `config.py` and can be overridden with environment variables (`CHAT_MODEL`, `EMBED_MODEL`, `KEEP_ALIVE`, `RELEVANCE_MAX_DISTANCE`, `OLLAMA_BASE_URL`). If you change the embedding model, delete the `vectorstore/` folder and re-index.
+All settings are in `config.py` and can be overridden with environment variables (`CHAT_MODEL`, `EMBED_MODEL`, `KEEP_ALIVE`, `RELEVANCE_MAX_DISTANCE`, `STRONG_DISTANCE`, `MINUTES_PER_ESCALATION`, `OLLAMA_BASE_URL`). Safety rules and the escalation contact are in `data/policies.json`. If you change the embedding model, delete the `vectorstore/` folder and re-index.
 
 ## Limitations
 

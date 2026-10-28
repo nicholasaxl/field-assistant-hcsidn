@@ -39,7 +39,7 @@ def test_troubleshooting_path_cites_sources():
     state = ask(app, "printer keeps jamming")
     assert state["intent"] == "troubleshooting"
     assert "**Sources**" in state["answer"] and "[1] runbook.md, Jam" in state["answer"]
-    assert state["trace"][-2] == "generate"
+    assert "generate" in state["trace"]
     assert "[1] runbook.md, Jam" in state["answer"]
     assert "[1]." not in state["answer"]  # the model's own marker is stripped; ours are computed
 
@@ -75,7 +75,8 @@ def test_steps_are_cited_by_content_and_unsupported_steps_are_flagged():
     assert lines[0] == "1. Open the cover and remove the paper. [1]"  # invented [7] replaced by computed [1]
     assert lines[1] == "2. Reboot the mainframe immediately."  # model's [1] dropped: not in any source
     assert "1 step(s) could not be matched" in state["answer"]
-    assert state["trace"][-1] == "citations: 1 step(s) matched, 1 unmatched"
+    assert "citations: 1 step(s) matched, 1 unmatched" in state["trace"]
+    assert state["strength"]["level"] == "check"  # an untraceable step means "check the sources"
 
 
 NEAR = Document(
@@ -112,7 +113,7 @@ def test_weak_retrieval_rewrites_then_falls_back():
     assert state["answer"] == prompts.FALLBACK
     assert state["retries"] == 2
     assert len(seen) == 3  # first attempt + two rewrites
-    assert state["trace"][-1] == "fallback"
+    assert "fallback" in state["trace"]
 
 
 def test_empty_question_goes_to_fallback():
@@ -134,6 +135,36 @@ def test_grader_cannot_veto_the_top_ranked_chunk():
     state = ask(app, "printer jam")
     assert [s["label"] for s in state["sources"]] == ["doc1.md, S", "doc3.md, S"]
     assert "grade: kept 2/3" in state["trace"]
+
+
+def test_critical_error_code_raises_an_alert_from_the_real_policy_file():
+    app, _ = make_app(FakeLLM("1"), [NEAR])
+    state = ask(app, "ATM shows A-2002", "HX-ATM-500")
+    assert state["intent"] == "error_code"
+    alerts = {a["id"]: a for a in state["alerts"]}
+    assert alerts["code-A-2002"]["level"] == "critical"
+    assert "escalate" in alerts["code-A-2002"]["message"].lower()
+    assert state["alerts"][0]["level"] == "critical"  # most severe first
+
+
+def test_policy_runs_on_the_not_found_path_too():
+    app, _ = make_app(FakeLLM("NONE"), [FAR], max_retries=0)
+    state = ask(app, "I think there is a skimmer on the card slot")
+    assert state["answer"] == prompts.FALLBACK
+    assert [a["id"] for a in state["alerts"]] == ["tampering"]
+
+
+def test_policy_function_is_injectable():
+    seen = {}
+
+    def fake_policy(question, records, text):
+        seen.update(question=question, text=text)
+        return [{"id": "x", "level": "warning", "title": "T", "message": "M"}]
+
+    app = build_graph(FakeLLM("1"), lambda q, d: [DOC], ErrorCodeDB(), policy_fn=fake_policy)
+    state = ask(app, "printer jam")
+    assert state["alerts"][0]["id"] == "x"
+    assert seen["question"] == "printer jam" and "Open the cover" in seen["text"]
 
 
 def test_no_docs_retrieved_triggers_rewrite_then_fallback():

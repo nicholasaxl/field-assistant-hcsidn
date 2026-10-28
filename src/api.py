@@ -11,16 +11,18 @@ import time
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 import httpx
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 import config
 from src import prompts
 from src.error_lookup import ErrorCodeDB
+from src.feedback import FeedbackStore
 from src.graph import build_default_app
 from src.ingest import delete_document, get_store, ingest_file, list_documents
 from src.loader import SUPPORTED_EXTENSIONS, validate_upload
@@ -58,6 +60,7 @@ STAGE_LABELS = {
     "rewrite": "Rephrasing the search",
     "generate": "Writing the answer",
     "format_citations": "Verifying sources",
+    "apply_policy": "Safety check",
     "fallback": "Nothing relevant found",
 }
 
@@ -68,6 +71,11 @@ def get_resources():
     store = get_store()
     code_db = ErrorCodeDB()
     return store, code_db, build_default_app(store, code_db)
+
+
+@lru_cache(maxsize=1)
+def get_feedback_store() -> FeedbackStore:
+    return FeedbackStore(config.FEEDBACK_DB)
 
 
 def probe_ollama() -> list[str] | None:
@@ -120,6 +128,11 @@ def describe_stage(node: str, update: dict, state: dict) -> str:
         if unverified:
             return f"{len(steps) - unverified} of {len(steps)} steps traced to a source"
         return f"All {len(steps)} steps traced to a source" if steps else "Done"
+    if node == "apply_policy":
+        alerts = update.get("alerts", [])
+        if not alerts:
+            return "No safety alerts"
+        return f"{len(alerts)} alert{'s' if len(alerts) != 1 else ''}: {alerts[0]['title']}"
     if node == "fallback":
         return "Try naming the device or error code"
     return ""
@@ -129,34 +142,62 @@ def sse(event: dict) -> str:
     return f"data: {json.dumps(event)}\n\n"
 
 
-def stream_answer(graph, question: str, device_model: str):
+def stream_answer(graph, question: str, device_model: str, feedback: FeedbackStore | None = None):
     started = time.perf_counter()
     state: dict = {"question": question, "device_model": device_model}
+    stage_log: list[dict] = []
     try:
         for chunk in graph.stream(dict(state), stream_mode="updates"):
             for node, update in chunk.items():
                 update = update or {}
                 detail = describe_stage(node, update, state)
                 state.update(update)
+                at = round(time.perf_counter() - started, 1)
+                stage_log.append({"node": node, "at": at})
                 yield sse(
                     {
                         "type": "stage",
                         "node": node,
                         "label": STAGE_LABELS.get(node, node),
                         "detail": detail,
-                        "at": round(time.perf_counter() - started, 1),
+                        "at": at,
                     }
                 )
         answer = state.get("answer", "")
+        blocks = state.get("blocks", [])
+        elapsed = round(time.perf_counter() - started, 1)
+        fallback = answer == prompts.FALLBACK
+
+        interaction_id = None
+        if feedback is not None:
+            try:  # logging must never break an answer
+                interaction_id = feedback.log_interaction(
+                    question=question,
+                    device=device_model,
+                    intent=state.get("intent"),
+                    fallback=fallback,
+                    elapsed=elapsed,
+                    stages=stage_log,
+                    steps=[b["text"] for b in blocks if b["kind"] == "step"],
+                    sources=[s["label"] for s in state.get("sources", [])],
+                    codes=[r["code"] for r in state.get("code_records", [])],
+                    alerts=state.get("alerts", []),
+                )
+            except Exception:
+                interaction_id = None
+
         yield sse(
             {
                 "type": "answer",
-                "fallback": answer == prompts.FALLBACK,
+                "interaction_id": interaction_id,
+                "fallback": fallback,
                 "intent": state.get("intent"),
                 "text": answer,
-                "blocks": state.get("blocks", []),
+                "blocks": blocks,
                 "sources": state.get("sources", []),
-                "elapsed": round(time.perf_counter() - started, 1),
+                "alerts": state.get("alerts", []),
+                "strength": state.get("strength"),
+                "elapsed": elapsed,
             }
         )
     except Exception as exc:  # surface a readable message instead of a dropped stream
@@ -172,7 +213,7 @@ class AskBody(BaseModel):
 def ask(body: AskBody):
     _, _, graph = get_resources()
     return StreamingResponse(
-        stream_answer(graph, body.question.strip(), body.device_model or config.ALL_DEVICES),
+        stream_answer(graph, body.question.strip(), body.device_model or config.ALL_DEVICES, get_feedback_store()),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -245,6 +286,94 @@ def remove_document(source: str):
     if not removed:
         raise HTTPException(status_code=404, detail=f"'{source}' is not in the library")
     return {"removed": source, "chunks": removed}
+
+
+class FeedbackBody(BaseModel):
+    interaction_id: str = Field(min_length=1, max_length=64)
+    outcome: Literal["fixed", "not_fixed", "escalated"]
+    reason: Literal["step_failed", "different_problem", "doc_wrong", "need_person"] | None = None
+    note: str | None = Field(default=None, max_length=1000)
+
+
+class StepBody(BaseModel):
+    interaction_id: str = Field(min_length=1, max_length=64)
+    index: int = Field(ge=0, le=200)
+    result: Literal["done", "failed"] | None = None
+
+
+@api.post("/api/feedback")
+def post_feedback(body: FeedbackBody):
+    feedback = get_feedback_store()
+    try:
+        feedback.set_outcome(body.interaction_id, body.outcome, body.reason, body.note)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="That answer is no longer on record")
+    handoff = feedback.handoff_summary(body.interaction_id) if body.outcome != "fixed" else None
+    return {"ok": True, "handoff": handoff}
+
+
+@api.delete("/api/feedback/{interaction_id}")
+def undo_feedback(interaction_id: str):
+    try:
+        get_feedback_store().clear_outcome(interaction_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="That answer is no longer on record")
+    return {"ok": True}
+
+
+@api.post("/api/steps")
+def post_step(body: StepBody):
+    try:
+        get_feedback_store().set_step_result(body.interaction_id, body.index, body.result)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="That answer is no longer on record")
+    return {"ok": True}
+
+
+@api.get("/api/handoff/{interaction_id}")
+def handoff(interaction_id: str):
+    try:
+        return {"text": get_feedback_store().handoff_summary(interaction_id)}
+    except KeyError:
+        raise HTTPException(status_code=404, detail="That answer is no longer on record")
+
+
+@api.get("/api/insights")
+def insights(days: int = Query(30, ge=1, le=365), minutes: int | None = Query(None, ge=0, le=600)):
+    return get_feedback_store().insights(days=days, minutes_per_escalation=minutes)
+
+
+@api.post("/api/insights/sample")
+def load_sample():
+    return {"loaded": get_feedback_store().load_sample()}
+
+
+@api.delete("/api/insights/sample")
+def remove_sample():
+    return {"removed": get_feedback_store().clear("sample")}
+
+
+@api.delete("/api/insights/data")
+def clear_data():
+    return {"removed": get_feedback_store().clear("all")}
+
+
+@api.get("/api/insights/export.csv")
+def export_insights():
+    return Response(
+        get_feedback_store().export_csv(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="field-assist-insights.csv"'},
+    )
+
+
+@api.get("/api/scorecard")
+def scorecard():
+    """The last accuracy check written by `python -m src.evaluate --answers`, if any."""
+    path = config.DOCS_DIR / "scorecard.json"
+    if not path.exists():
+        return {"available": False}
+    return {"available": True, **json.loads(path.read_text(encoding="utf-8"))}
 
 
 # Serve the built frontend last so /api routes win.

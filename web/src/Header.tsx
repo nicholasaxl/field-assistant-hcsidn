@@ -1,15 +1,17 @@
 import { AnimatePresence, motion } from "motion/react";
 import { Arcs } from "./Arcs";
-import { LibraryIcon, Moon, SourcesIcon, Sun } from "./Icons";
+import { InsightsIcon, LibraryIcon, Moon, SourcesIcon, Sun } from "./Icons";
 import type { Health } from "./types";
 
 type Props = {
   theme: "light" | "dark";
   onTheme: () => void;
   health: Health | null;
-  docCount: number;
+  docCount: number | null;
   libraryOpen: boolean;
   onLibrary: () => void;
+  insightsOpen: boolean;
+  onInsights: () => void;
   sourcesAvailable: boolean;
   sourcesOpen: boolean;
   onSources: () => void;
@@ -48,7 +50,12 @@ export function Header(p: Props) {
         <button className="pill-btn" aria-expanded={p.libraryOpen} onClick={p.onLibrary} aria-label="Open library">
           <LibraryIcon />
           <span className="btn-label">Library</span>
-          <span className="count">{p.docCount}</span>
+          <span className="count">{p.docCount ?? "…"}</span>
+        </button>
+
+        <button className="pill-btn" aria-pressed={p.insightsOpen} onClick={p.onInsights} aria-label="Open insights">
+          <InsightsIcon />
+          <span className="btn-label">Insights</span>
         </button>
 
         <AnimatePresence initial={false}>

@@ -4,5 +4,6 @@ __pycache__/
 .pytest_cache/
 .claude/
 .env
+data/feedback.db*
 web/node_modules/
 web/dist/

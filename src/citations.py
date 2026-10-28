@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import re
 
-_STEP = re.compile(r"^\s*(?:\d+[.)]|[-*•])\s+")
+import config
+
+_STEP =re.compile(r"^\s*(?:\d+[.)]|[-*•])\s+")
 _MODEL_CITATION = re.compile(r"\s*\[\d+\]")
 _STOPWORDS = frozenset(
     "the a an and or to of in on at for with from is are be it its this that then if when you your "
@@ -36,6 +38,18 @@ def _step_citations(step_text: str, source_words: list[set[str]]) -> list[int]:
     # words in an unrelated passage don't produce a bogus extra source.
     cutoff = max(MATCH_THRESHOLD, scored[0][0] - SECONDARY_MARGIN) if scored else MATCH_THRESHOLD
     return [number for score, number in scored[:MAX_CITATIONS] if score >= cutoff]
+
+
+def answer_strength(sources: list[dict], matched: int, unmatched: int, has_exact_code: bool) -> dict:
+    """A coarse trust label for the UI. Deliberately words, never a probability."""
+    if unmatched:
+        return {"level": "check", "label": "Check the sources", "reason": f"{unmatched} step(s) not found in the documents"}
+    if matched == 0:
+        return {"level": "check", "label": "Check the sources", "reason": "No steps could be traced to a document"}
+    distances = [s["distance"] for s in sources if s.get("distance") is not None]
+    if has_exact_code or (distances and min(distances) <= config.STRONG_DISTANCE):
+        return {"level": "strong", "label": "Strong match", "reason": "Every step traces to a close source"}
+    return {"level": "good", "label": "Good match", "reason": "Every step traces to a source"}
 
 
 def attribute(answer: str, source_texts: list[str]) -> tuple[str, int, int]:

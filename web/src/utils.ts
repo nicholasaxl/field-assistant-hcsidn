@@ -22,7 +22,21 @@ export function matchLevel(distance: number | null): { bars: 1 | 2 | 3; label: s
 
 export const fileKind = (name: string) => (name.split(".").pop() ?? "file").slice(0, 4).toUpperCase();
 
-export const formatSize = (bytes: number) =>
+/** 'atm_cash_dispenser_jam_runbook.md' -> 'Atm cash dispenser jam runbook'; error codes stay as they are. */
+export function prettyDoc(name: string): string {
+  if (/^[A-Z]{1,3}-?\d{3,5}$/.test(name)) return name;
+  const base = name
+    .replace(/\.[a-z0-9]{2,5}$/i, "")
+    .replace(/\bhx[-_ ](atm|pos|kiosk)[-_ ](\d+)/gi, (_m, kind: string, num: string) => `HX-${kind.toUpperCase()}-${num}`)
+    .replace(/[_]+/g, " ")
+    .replace(/-(?!\d)/g, " ")
+    .trim();
+  return base.charAt(0).toUpperCase() + base.slice(1);
+}
+
+export const percent = (rate: number | null) => (rate === null ? "n/a" : `${Math.round(rate * 100)}%`);
+
+export const formatSize =(bytes: number) =>
   bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
 export const newId =() => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;

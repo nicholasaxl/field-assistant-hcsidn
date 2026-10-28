@@ -1,9 +1,9 @@
 """LangGraph agent. Routing is plain Python; the LLM only grades, rewrites and writes the answer.
 
-classify -> (error_code) lookup_code -> retrieve -> grade -> generate -> format_citations
-                                            ^          |
-                                            |       (weak, retries left)
-                                         rewrite <-----+      (still weak) -> fallback
+classify -> (error_code) lookup_code -> retrieve -> grade -> generate -> format_citations -> apply_policy
+                                            ^          |                                       ^
+                                            |       (weak, retries left)                       |
+                                         rewrite <-----+      (still weak) -> fallback --------+
 """
 from __future__ import annotations
 
@@ -15,8 +15,9 @@ from langgraph.graph import END, START, StateGraph
 
 import config
 from src import prompts
-from src.citations import analyze, attribute
+from src.citations import analyze, answer_strength, attribute
 from src.error_lookup import ErrorCodeDB
+from src.policy import evaluate as evaluate_policy
 
 
 class AgentState(TypedDict, total=False):
@@ -29,6 +30,8 @@ class AgentState(TypedDict, total=False):
     answer: str
     sources: list
     blocks: list  # structured answer for the UI: steps with their citations
+    strength: dict  # coarse trust label for the UI
+    alerts: list  # safety alerts decided by rules, not by the model
     retries: int
     trace: list
 
@@ -48,6 +51,7 @@ def build_graph(
     retrieve_fn: Callable[[str, str | None], list],
     code_db: ErrorCodeDB,
     max_retries: int = config.MAX_RETRIES,
+    policy_fn: Callable[[str, list, str], list] = evaluate_policy,
 ):
     """Compile the agent. `llm` needs .invoke(str); `retrieve_fn(query, device_model)` returns Documents."""
 
@@ -150,8 +154,16 @@ def build_graph(
         return {
             "answer": f"{answer}{note}\n\n**Sources**\n" + "\n".join(lines),
             "blocks": analyze(state["answer"], [s["text"] for s in sources]),
+            "strength": answer_strength(sources, matched, unmatched, bool(state["code_records"])),
             "trace": state["trace"] + [f"citations: {matched} step(s) matched, {unmatched} unmatched"],
         }
+
+    def apply_policy(state: AgentState) -> dict:
+        """Rule-based safety check. Runs on every path, including 'not found'."""
+        blocks = state.get("blocks") or []
+        text = " ".join(b["text"] for b in blocks) if blocks else state.get("answer", "")
+        alerts = policy_fn(state["question"], state.get("code_records", []), text)
+        return {"alerts": alerts, "trace": state.get("trace", []) + [f"policy: {len(alerts)} alert(s)"]}
 
     def fallback(state: AgentState) -> dict:
         return {
@@ -169,6 +181,7 @@ def build_graph(
         ("rewrite", rewrite),
         ("generate", generate),
         ("format_citations", format_citations),
+        ("apply_policy", apply_policy),
         ("fallback", fallback),
     ]:
         graph.add_node(name, fn)
@@ -186,8 +199,9 @@ def build_graph(
     )
     graph.add_edge("rewrite", "retrieve")
     graph.add_edge("generate", "format_citations")
-    graph.add_edge("format_citations", END)
-    graph.add_edge("fallback", END)
+    graph.add_edge("format_citations", "apply_policy")
+    graph.add_edge("fallback", "apply_policy")
+    graph.add_edge("apply_policy", END)
     return graph.compile()
 
 

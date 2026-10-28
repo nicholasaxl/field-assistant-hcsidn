@@ -1,5 +1,7 @@
 import { motion, useReducedMotion } from "motion/react";
 import { useState } from "react";
+import { Alerts } from "./Alerts";
+import { FeedbackBar } from "./FeedbackBar";
 import { Alert, Copy, Check, Info, LibraryIcon, SourcesIcon } from "./Icons";
 import type { AnswerData, Block } from "./types";
 
@@ -56,19 +58,26 @@ function group(blocks: Block[]): Group[] {
 export function AnswerView({ answer, activeSource, onCite, onOpenSources, onOpenLibrary }: Props) {
   const reduce = useReducedMotion();
   const [copied, setCopied] = useState(false);
+  const alerts = answer.alerts ?? [];
+  // A critical alert comes first; the procedure stays one deliberate click away.
+  const [showSteps, setShowSteps] = useState(!alerts.some((a) => a.level === "critical"));
 
   if (answer.fallback) {
     return (
-      <div className="notice" role="status">
-        <Info />
-        <div>
-          <p className="notice-title">Nothing in the library matches</p>
-          <p>Name the device or error code, or add the manual that covers it. Otherwise escalate to level 2 support.</p>
-          <button className="pill-btn" onClick={onOpenLibrary}>
-            <LibraryIcon />
-            Open library
-          </button>
+      <div className="answer">
+        <Alerts alerts={alerts} />
+        <div className="notice" role="status">
+          <Info />
+          <div>
+            <p className="notice-title">Nothing in the library matches</p>
+            <p>Name the device or error code, or add the manual that covers it. Otherwise escalate to level 2 support.</p>
+            <button className="pill-btn" onClick={onOpenLibrary}>
+              <LibraryIcon />
+              Open library
+            </button>
+          </div>
         </div>
+        {answer.interaction_id && <FeedbackBar interactionId={answer.interaction_id} noAnswer />}
       </div>
     );
   }
@@ -90,7 +99,22 @@ export function AnswerView({ answer, activeSource, onCite, onOpenSources, onOpen
 
   return (
     <div className="answer">
-      {groups.map((g, gi) =>
+      <Alerts alerts={alerts} />
+      {answer.strength && (
+        <p className="strength" data-level={answer.strength.level} title={answer.strength.reason}>
+          <span className="strength-dot" />
+          {answer.strength.label}
+        </p>
+      )}
+      {!showSteps ? (
+        <div className="gate">
+          <p>The documented procedure is hidden until you've read the alert above.</p>
+          <button className="pill-btn" onClick={() => setShowSteps(true)}>
+            Show the documented procedure
+          </button>
+        </div>
+      ) : (
+        groups.map((g, gi) =>
         g.kind === "text" ? (
           <p className="answer-text" key={gi}>
             {g.text}
@@ -138,6 +162,7 @@ export function AnswerView({ answer, activeSource, onCite, onOpenSources, onOpen
             })}
           </ol>
         ),
+        )
       )}
 
       <div className="answer-actions">
@@ -156,6 +181,8 @@ export function AnswerView({ answer, activeSource, onCite, onOpenSources, onOpen
         )}
         <span className="elapsed">{answer.elapsed} s</span>
       </div>
+
+      {answer.interaction_id && <FeedbackBar interactionId={answer.interaction_id} />}
     </div>
   );
 }

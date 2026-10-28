@@ -6,6 +6,12 @@ ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
 MANUALS_DIR = DATA_DIR / "manuals"
 ERROR_CODES_CSV = DATA_DIR / "error_codes.csv"
+POLICIES_JSON = DATA_DIR / "policies.json"
+FEEDBACK_DB = DATA_DIR / "feedback.db"
+DOCS_DIR = ROOT / "docs"
+# Default for the Insights time-saved estimate: engineer minutes avoided per question that was fixed
+# without calling a person. It is an assumption the user can edit in the UI, never a measurement.
+MINUTES_PER_ESCALATION = int(os.getenv("MINUTES_PER_ESCALATION", "25"))
 VECTOR_DIR = ROOT / "vectorstore"
 COLLECTION = "manuals"
 
@@ -27,6 +33,8 @@ MAX_RETRIES = 2  # query rewrites before giving up
 # out of scope. Tuned for nomic-embed-text on the sample docs (in-scope 0.4-0.8, unrelated 0.95+);
 # re-tune with `python -m src.evaluate` if you change the embedding model.
 RELEVANCE_MAX_DISTANCE = float(os.getenv("RELEVANCE_MAX_DISTANCE", "0.88"))
+# Best-chunk distance at or below this counts as a "Strong match" in the UI.
+STRONG_DISTANCE = float(os.getenv("STRONG_DISTANCE", "0.7"))
 
 # Uploads
 MAX_UPLOAD_MB = 50
