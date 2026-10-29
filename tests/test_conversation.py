@@ -28,6 +28,8 @@ def test_short_or_cued_questions_after_an_answer_are_follow_ups(text):
         "How do I replace the receipt printer paper roll on the point of sale terminal?",  # long: stands alone
         "Kiosk shows K-1001",  # a new error code starts a new problem
         "Card reader is not detected",  # no cue, long enough to stand alone
+        "how do i clean my toilet",  # few keywords but a full, unrelated question: must not borrow the last turn
+        "how do i apply to universities",
     ],
 )
 def test_questions_that_stand_on_their_own_are_not_follow_ups(text):

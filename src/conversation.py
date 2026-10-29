@@ -38,7 +38,9 @@ def is_follow_up(question: str, history: list[dict]) -> bool:
     tokens = tokenize(text)
     if len(tokens) > 9:
         return False  # long enough to stand on its own
-    return bool(FOLLOW_CUES.search(text)) or len(tokens) <= 2
+    # Without a cue, only a genuinely tiny question ("kiosk?") leans on the last turn. Judged on the words typed,
+    # not the keywords left after stop-words, or "how do i clean my toilet" would borrow the previous question.
+    return bool(FOLLOW_CUES.search(text)) or (len(tokens) <= 2 and len(text.split()) <= 3)
 
 
 def contextualize(question: str, history: list[dict]) -> dict | None:
