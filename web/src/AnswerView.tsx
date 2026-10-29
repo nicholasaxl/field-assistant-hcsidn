@@ -83,8 +83,8 @@ export function AnswerView({ answer, activeSource, onCite, onOpenSources, onOpen
               <>
                 <p className="notice-title">Nothing in the library matches</p>
                 <p>
-                  Name the device or error code, or add the manual that covers it. Otherwise escalate to level 2
-                  support.
+                  This may not be a field-support question. If it is, name the device or error code, or add the
+                  manual that covers it. Otherwise escalate to level 2 support.
                 </p>
                 <button className="pill-btn" onClick={onOpenLibrary}>
                   <LibraryIcon />
